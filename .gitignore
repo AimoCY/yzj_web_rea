@@ -1,0 +1,25 @@
+# Local investigation: client bundles, screenshots, captures and evidence.
+analysis/
+
+# Runtime credentials and debug output.
+.env
+.env.*
+!.env.example
+*.cookies
+*.har
+*.pcap
+*.pcapng
+*.log
+*.pem
+*.key
+
+# Generated files and local tools.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+dist/
+.DS_Store
+.idea/
+.vscode/

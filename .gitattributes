@@ -1,0 +1,7 @@
+* text=auto
+*.png binary
+# Defense in depth for source archives; .gitignore handles working files.
+analysis/** export-ignore
+.env export-ignore
+.env.* export-ignore
+.env.example -export-ignore
