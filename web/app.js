@@ -60,6 +60,7 @@ async function loginPoll(){
   catch(e){$('login-status').textContent=e.message+'，正在重试';}
   loginTimer=setTimeout(loginPoll,2500);
 }
+$('qr').onerror=()=>{clearTimeout(loginTimer);$('qr').hidden=true;$('qr-placeholder').hidden=false;$('login-status').textContent='二维码图片加载失败，请重新获取二维码；若仍失败，请检查网络或代理。';};
 $('refresh').onclick=async()=>{
   clearTimeout(loginTimer);$('refresh').disabled=true;
   try{await api('login/start',{method:'POST'});$('qr').src=API_BASE+'login/qr-image?t='+Date.now();$('qr').hidden=false;$('qr-placeholder').hidden=true;$('login-status').textContent='请用云之家 App 扫码并确认登录';loginTimer=setTimeout(loginPoll,1500);}

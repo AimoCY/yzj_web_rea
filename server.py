@@ -52,9 +52,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def session(self):
         cookies = dict(part.strip().split('=', 1) for part in self.headers.get('Cookie', '').split(';') if '=' in part)
-        sid = SHARED_SESSION if PLUGIN_SECRET and SHARED_SESSION else cookies.get('yzj_local')
+        shared = bool(PLUGIN_SECRET and SHARED_SESSION)
+        sid = SHARED_SESSION if shared else cookies.get('yzj_local')
         if sid not in SESSIONS:
-            sid = secrets.token_urlsafe(32)
+            # A plugin's secret-protected requests must share the configured jar.
+            # Standalone clients still receive a fresh opaque cookie identifier.
+            if not shared:
+                sid = secrets.token_urlsafe(32)
             SESSIONS[sid] = Session()
             self.new_sid = sid
         return SESSIONS[sid]
