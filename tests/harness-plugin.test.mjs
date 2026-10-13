@@ -23,7 +23,7 @@ test('mount adaptation rewrites private media references, not message text',()=>
  assert.deepEqual(rewriteMedia({content:'/api/private is text',avatar:'/api/media?key=k',items:[{image:'/api/media?key=i'}]},'/plugins/yzj'),{content:'/api/private is text',avatar:'/plugins/yzj/api/media?key=k',items:[{image:'/plugins/yzj/api/media?key=i'}]});
 });
 const config={enabled:true,recipients:['group'],mentionOnly:false,pollIntervalMs:1000,replyTimeoutMs:5000,maxConcurrent:2};
-function fixture(batches){const sent=[],receipts=[];const bridge={json:async(path,options)=>{if(path==='status')return {authenticated:true};if(path==='me')return {id:'mine',wbUserId:'web-mine'};if(path.startsWith('history?'))return batches.shift()||{items:[],newest:'m1'};if(path==='messages/receipt'){receipts.push(options.body);return {}; }throw Error(path);},target:async()=>({id:'group',name:'Demo',isGroup:true}),sendText:async(...args)=>{sent.push(args);return {success:true};}};return {bridge,sent,receipts};}
+function fixture(batches){const sent=[],receipts=[];const bridge={json:async(path,options)=>{if(path==='status')return {authenticated:true};if(path==='me')return {id:'mine',wbUserId:'web-mine'};if(path.startsWith('history?'))return batches.shift()||{items:[],newest:'m1'};if(path==='messages/receipt'){receipts.push(options.body);return {}; }throw Error(path);},target:async()=>({id:'group',name:'Demo',isGroup:false}),sendText:async(...args)=>{sent.push(args);return {success:true};}};return {bridge,sent,receipts};}
 test('activation seeds history, new inbound triggers one response, own/duplicate messages do not loop',async()=>{
  const f=fixture([{items:[{id:'old',type:2,content:'historical'}],newest:'old'},{items:[{id:'m1',type:2,senderId:'other',content:'hello'},{id:'own',type:2,own:true,content:'mine'}],newest:'own'},{items:[{id:'m1',type:2,content:'duplicate'}],newest:'own'}]);let turns=0;
  const auto=new AutoReplyController(f.bridge,config,async()=>{turns++;return 'reply';});
@@ -33,6 +33,7 @@ test('activation seeds history, new inbound triggers one response, own/duplicate
 });
 test('group mention filter and withdrawal handling avoid unintended replies',()=>{
  const me={id:'mine'};
+ assert.equal(eligible({id:'all',type:2,senderId:'other',param:{notifyToAll:true}},{mentionOnly:true},me),false);
  assert.equal(eligible({id:'1',type:2,senderId:'other',param:{}},{mentionOnly:true},me),false);
  assert.equal(eligible({id:'1',type:2,senderId:'other',param:{notifyTo:['mine']}},{mentionOnly:true},me),true);
  assert.equal(eligible({id:'1',type:2,withdrawn:true,param:{notifyTo:['mine']}},{mentionOnly:true},me),false);

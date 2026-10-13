@@ -23,7 +23,7 @@ const messages = [
  {id:'demo-4',type:2,own:true,time:'2026-10-13 10:26:00',content:'图片收到，可以查看原图。',unreadCount:0},
  {id:'demo-5',type:2,sender:'演示联系人',time,content:'支持拖拽、粘贴和多图发送，也可以逐页读取历史消息。'}
 ];
-const staticFiles={'/':'web/index.html','/app.js':'web/app.js','/style.css':'web/style.css','/api/ui/chat-utils':'web/chat-utils.mjs','/api/ui/markdown':'web/markdown.mjs','/api/ui/composer-utils':'web/composer-utils.mjs'};
+const staticFiles={'/':'web/index.html','/app.js':'web/app.js','/style.css':'web/style.css','/api/ui/auto-reply-settings':'web/auto-reply-settings.mjs','/api/ui/media-cache':'web/media-cache.mjs','/api/ui/chat-utils':'web/chat-utils.mjs','/api/ui/markdown':'web/markdown.mjs','/api/ui/composer-utils':'web/composer-utils.mjs'};
 async function setup(page, options={}) {
  await page.addInitScript(() => {
   // Replace the realtime transport, so screenshots never contact upstream services.

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {apply} from '../plugin/index.mjs';
 function fixture(failTool=false){
  const routes=new Map(),tools=new Map(),listeners=new Set(),cleanups=[];
- const ctx={logger:{warn(){}},agents:{},agentDefaultModel:{},connection:{requestRejection(){}},
+ const ctx={logger:{warn(){}},agents:{},agentDefaultModel:{},systemPrompt:{},connection:{requestRejection(){}},
   effect:async init=>{cleanups.push(await init());},
   on:()=>{const marker={};listeners.add(marker);return ()=>listeners.delete(marker);},
   webServer:{register:route=>{if(routes.has(route.path))throw Error('duplicate route');routes.set(route.path,route);return ()=>routes.delete(route.path);}},

@@ -1,5 +1,7 @@
 # 云之家 DeepSeek Harness 插件
 
+插件 0.2.0 支持在云之家页面“消息”入口下方打开“自动回复”配置，选择联系人或群聊并设置通用/单独提示词。群聊固定要求明确 @ 本人。使用方法见 [插件文档](docs/harness-plugin.md)。
+
 将个人云之家账号接入 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)：在 Harness 侧栏打开聊天页面，Agent 可查询会话、读取消息、发送文字/图片/文件，也可自动处理指定会话的新消息并回传答复。
 
 本分支是插件版本。Cordis Host/Client 插件管理连接生命周期、受保护的页面、Agent 工具和自动回复；已验证的云之家协议核心作为插件自动启动的本机 Python 服务复用，无需另外运行发送器。仍需 Python 3.9+，不需要云之家桌面客户端。独立网页模式也保留用于开发与兼容。
@@ -50,13 +52,13 @@ npm pack
 
 ```sh
 dsh --profile yzj --from-default-profile web --dump-config
-dsh plugin --profile yzj add /absolute/path/dsh-plugin-yunzhijia-0.1.5.tgz
+dsh plugin --profile yzj add /absolute/path/dsh-plugin-yunzhijia-0.2.0.tgz
 dsh --profile yzj --no-open
 ```
 
 打开 Harness 给出的登录链接，在侧栏点击“云之家”，用云之家手机 App 扫码。之后 UI 与 Agent 工具共享同一个网页登录会话。插件卸载或 Harness 退出会停止连接服务，重启后需要重新扫码。
 
-自动回复默认关闭。开启时需要会话 ID 白名单；从 `yunzhijia_conversations` 工具取得 ID，按 [插件配置说明](docs/harness-plugin.md) 配置。群聊默认只回复 @ 提醒，单聊白名单内的新消息可直接触发。每个账号/会话使用独立 Agent，避免对话串线；初次连接不回答历史记录，过滤自己发送的消息。
+自动回复默认关闭。登录后在“自动回复”配置模块选择联系人或群聊，填写通用或单独提示词并保存开启；无需手工填写会话 ID。群聊必须明确 @ 本人，@ 所有人不会触发；单聊白名单内的新消息可直接触发。每个账号/会话使用独立 Agent，初次连接不回答历史记录，过滤自己发送的消息。详细说明见 [插件配置说明](docs/harness-plugin.md)。
 
 自动回复使用 Harness 当前默认模型，生成的消息只回传到来源会话。文字以外的消息会提供附件名称，当前不自动读取附件内容或进行图像识别。原有工具仍可按用户要求主动发送图片和文件。
 

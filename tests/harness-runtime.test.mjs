@@ -14,6 +14,6 @@ test('official Harness creates an isolated auto-reply Agent using a mock model',
  try{
   let value;
   for(let i=0;i<200;i++){try{value=JSON.parse(await readFile(resultFile,'utf8'));break;}catch{}if(child.exitCode!==null)throw Error('Harness exited before verification');await new Promise(r=>setTimeout(r,100));}
-  assert.deepEqual(value,{result:'synthetic reply',agents:1});
+  assert.deepEqual(value,{result:'synthetic reply',agents:2,promptsVerified:true});
  }finally{if(child.exitCode===null){const exited=once(child,'exit');child.kill('SIGTERM');const timer=setTimeout(()=>child.kill('SIGKILL'),3000);await exited;clearTimeout(timer);}await rm(dir,{recursive:true,force:true});}
 });

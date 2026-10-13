@@ -22,6 +22,16 @@ Host 通过 `apply`、`inject`、Schemastery `Config`、`ctx.effect`、`ctx.tool
 
 ## 安装与配置
 
+0.2.0 起推荐登录后使用云之家页面左侧“消息”下方的“自动回复”模块配置。选择联系人或群聊，设置通用提示词和单独提示词，开启开关后点击“保存并应用”。单独提示词优先于通用提示词；留空时使用自然、简洁回复的默认要求。
+
+群聊必须明确 @ 本人，@ 所有人不会触发。旧 YAML 中 `mentionOnly: false` 不再放宽群聊规则。高级配置支持检查间隔（1000–60000 毫秒）、回复超时（1000–600000 毫秒）、并发数（1–10）和工具白名单。模型使用新建 Agent 时的 Harness 默认模型。
+
+提示词注册到该会话 Agent 的系统提示词段，聊天内容作为外部用户消息输入。保存配置会取消原有回复生成、清理 Agent 上下文，再建立新消息游标，不补发历史。Python 登录服务保持运行。
+
+网页配置按云之家账号保存到 `${DSH_HOME:-~/.dsh}/yunzhijia/<安装目录及挂载路径哈希>.json`，权限为 0600。可用插件 `settingsPath` 指定绝对路径；同一源码目录运行多个 profile 时，请分别指定路径。该文件包含会话 ID 和提示词，不应提交公开仓库。网页保存值优先于 YAML 初始配置，未保存过的账号使用 YAML 初始配置。
+
+`/api/auto-reply` 受 Harness 鉴权保护，POST 校验 Origin、账号、有效会话和大小，并串行执行保存。配置以临时文件原子替换。文件持久化、权限、HTTP 校验、群聊触发、真实 Harness 系统提示词隔离及浏览器配置操作均有测试；测试使用虚构数据和模拟模型，尚未进行真实账号自动回复验收。
+
 先按 README 打包安装，再使用本机 profile 覆盖层配置同名 `yunzhijia` 行。覆盖会替换整份 config；没有填写的字段由 Config 默认值补齐：
 
 ```yaml
@@ -53,8 +63,10 @@ Host 通过 `apply`、`inject`、Schemastery `Config`、`ctx.effect`、`ctx.tool
 | `workspacePath` | 空 | 自动回复 Agent 的工作目录，空值使用启动目录 |
 | `fileRoots` | `[]` | Agent 附件发送可额外读取的根目录；默认限制在当前工作目录 |
 | `autoReply.enabled` | false | 开启自动接收与回复 |
+| `autoReply.prompt` | 空 | 通用回复提示词 |
+| `autoReply.recipientPrompts` | `{}` | 会话 ID 到单独提示词的映射；非空值优先于通用提示词 |
 | `autoReply.recipients` | `[]` | 允许自动回复的精确会话 ID；开启时必须配置 |
-| `autoReply.mentionOnly` | true | 群聊仅处理当前账号被 @ 的消息；单聊不要求 @ |
+| `autoReply.mentionOnly` | true | 群聊固定要求明确 @ 本人，@ 所有人不触发；单聊不要求 @ |
 | `autoReply.pollIntervalMs` | 4000 | 后台消息校准间隔，最小 1000 |
 | `autoReply.replyTimeoutMs` | 180000 | 单次模型回复截止时间 |
 | `autoReply.maxConcurrent` | 2 | 同时处理会话数；每个会话串行 |
@@ -80,7 +92,7 @@ Host 通过 `apply`、`inject`、Schemastery `Config`、`ctx.effect`、`ctx.tool
 ## 自动回复与数据边界
 
 - 首次观察只记录最新游标，新消息进入后才触发；过滤自己发送、系统、撤回及重复消息。
-- 白名单之外不触发；群聊可要求 @，单聊在白名单内直接触发。
+- 白名单之外不触发；群聊必须明确 @ 本人，@ 所有人不触发；单聊在白名单内直接触发。
 - 每个账号和会话有独立 Agent，回复串行；多会话遵守并发上限。
 - 只回传最终文本，不发送思考内容或工具调用中间文本；Agent 报错、取消或登录账号改变时不回传旧答复。
 - 超过 10000 个字符的答复会截断并附提示。发送回执不确定仅核对，不自动再次发送。

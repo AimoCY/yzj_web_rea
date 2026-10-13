@@ -263,9 +263,9 @@ def members(s,target,remote,avatars=True):
     return {'items':items}
 
 def handle(h,s,path,remote,profile):
-    if path in {'/api/ui/chat-utils','/api/ui/emojis','/api/ui/markdown','/api/ui/composer-utils','/api/ui/media-cache'}:
+    if path in {'/api/ui/chat-utils','/api/ui/emojis','/api/ui/markdown','/api/ui/composer-utils','/api/ui/media-cache','/api/ui/auto-reply-settings'}:
         from pathlib import Path
-        name={'chat-utils':'chat-utils.mjs','emojis':'emojis.json','markdown':'markdown.mjs','composer-utils':'composer-utils.mjs','media-cache':'media-cache.mjs'}[path.rsplit('/',1)[-1]]
+        name={'chat-utils':'chat-utils.mjs','emojis':'emojis.json','markdown':'markdown.mjs','composer-utils':'composer-utils.mjs','media-cache':'media-cache.mjs','auto-reply-settings':'auto-reply-settings.mjs'}[path.rsplit('/',1)[-1]]
         h.respond((Path(__file__).parent/'web'/name).read_bytes(),mime='application/json; charset=utf-8' if name.endswith('.json') else 'text/javascript; charset=utf-8');return True
     if path not in {'/api/sync','/api/history','/api/media','/api/events','/api/me','/api/read-state','/api/members','/api/card','/api/document'}:return False
     if not s.authenticated:h.respond({'error':'请先扫码登录','requiresLogin':True},401);return True

@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>云之家 · 网页聊天</title><link rel="stylesheet" href="/style.css"></head>
 <body>
 <div class="shell">
- <nav class="rail" aria-label="主导航"><a class="brand" href="/" title="云之家网页版">☁</a><button class="rail-active" aria-label="聊天">▤<small>消息</small></button><div class="rail-bottom"><span id="me-avatar" class="avatar mine-avatar">我</span><button id="logout" title="退出登录" aria-label="退出登录" hidden>↪</button></div></nav>
+ <nav class="rail" aria-label="主导航"><a class="brand" href="/" title="云之家网页版">☁</a><button id="chat-nav" class="rail-active" aria-label="聊天">▤<small>消息</small></button><button id="auto-reply-nav" aria-label="自动回复配置" hidden>⚙<small>自动回复</small></button><div class="rail-bottom"><span id="me-avatar" class="avatar mine-avatar">我</span><button id="logout" title="退出登录" aria-label="退出登录" hidden>↪</button></div></nav>
  <aside class="sidebar">
   <div class="sidebar-title"><h1>消息 <span id="total-unread" hidden></span></h1><button id="refresh-list" class="icon-button" title="刷新会话" aria-label="刷新会话" disabled>↻</button></div>
   <label class="search-box"><span>⌕</span><input id="search" placeholder="搜索联系人、群聊" aria-label="搜索联系人或群聊" disabled></label>
@@ -11,6 +11,17 @@
   <div id="conversations" class="conversation-list" role="list" aria-label="聊天列表"><p class="empty">登录后显示聊天列表</p></div>
   <div class="connection"><span id="light"></span><span id="connection" role="status">尚未登录</span><span id="sync-time"></span></div>
  </aside>
+ <section id="auto-reply-settings" class="auto-reply-settings" hidden>
+ <header><h1>自动回复配置</h1><button id="auto-reply-back" class="icon-button" aria-label="返回聊天">×</button></header>
+ <p>选择允许自动回复的联系人或群聊。群聊必须明确 @ 本人，@ 所有人不会触发。</p>
+ <form id="auto-reply-form">
+ <label class="auto-switch"><input id="auto-enabled" type="checkbox">开启自动回复</label>
+ <label>通用回复提示词<textarea id="auto-prompt" maxlength="8000" rows="5" placeholder="例如：你是我的工作助手，用简洁、友好的中文回复。无法确定的事情请说明。"></textarea></label>
+ <fieldset><legend>选择联系人 / 群聊</legend><input id="auto-search" placeholder="搜索联系人或群聊" aria-label="搜索自动回复会话"><button id="auto-search-button" type="button">搜索</button><div id="auto-recipients" class="auto-recipients"></div><p>每个会话可设置单独提示词；留空时使用通用提示词。</p></fieldset>
+ <details><summary>高级配置</summary><div class="auto-advanced"><label>检查间隔（毫秒）<input id="auto-interval" type="number" min="1000" max="60000" required></label><label>回复超时（毫秒）<input id="auto-timeout" type="number" min="1000" max="600000" required></label><label>并发会话数<input id="auto-concurrency" type="number" min="1" max="10" required></label><label>允许的 Agent 工具（逗号分隔）<input id="auto-tools" placeholder="默认留空，仅生成回复"></label></div><p>群聊仅 @ 本人的规则始终生效。模型使用 Harness 默认模型。启用工具后，对方的消息可能触发这些工具。</p></details>
+ <footer><button id="auto-save" class="primary" type="submit">保存并应用</button><button id="auto-reload" type="button">重新加载</button><span id="auto-status" role="status"></span></footer>
+ </form>
+</section>
  <main id="chat-main" class="chat-main">
   <header class="chat-header"><button id="back" class="icon-button" aria-label="返回聊天列表">‹</button><span id="chat-avatar" class="avatar header-avatar">☁</span><div class="chat-heading"><h2 id="chat-name">云之家网页版</h2><p id="chat-meta">个人账号 · 联系人和群聊</p></div><button id="history-search-toggle" class="icon-button" title="搜索已加载的消息" aria-label="搜索对话内容" disabled>⌕</button><button id="members-toggle" class="icon-button" title="会话资料" aria-label="会话资料" disabled>⋯</button></header>
   <div id="history-search-bar" class="history-search" hidden><input id="history-search" placeholder="搜索已加载的消息内容" aria-label="搜索已加载的消息内容"><span id="history-match"></span><button id="search-prev" class="icon-button" aria-label="上一个结果">↑</button><button id="search-next" class="icon-button" aria-label="下一个结果">↓</button><button id="search-close" class="icon-button" aria-label="关闭消息搜索">×</button></div>
