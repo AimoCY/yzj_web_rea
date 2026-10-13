@@ -15,10 +15,11 @@ export function validateAutoReply(value){
  return {enabled:value.enabled,recipients,mentionOnly:true,prompt:text(value.prompt??'',8000,'通用提示词'),recipientPrompts,pollIntervalMs:integer(value.pollIntervalMs,1000,60000,'检查间隔'),replyTimeoutMs:integer(value.replyTimeoutMs,1000,600000,'回复超时'),maxConcurrent:integer(value.maxConcurrent,1,10,'并发数'),allowedTools};
 }
 export class ReplySettings{
- constructor(path,defaults){this.path=path;this.defaults=validateAutoReply({...defaults,prompt:defaults.prompt||'',recipientPrompts:defaults.recipientPrompts||{}});this.accounts={};}
- async load(){try{const data=JSON.parse(await readFile(this.path,'utf8'));if(data.version!==1||!data.accounts||typeof data.accounts!=='object')throw Error('自动回复配置文件格式无效');for(const [id,value] of Object.entries(data.accounts))this.accounts[id]=validateAutoReply(value);}catch(error){if(error.code!=='ENOENT')throw error;}return this;}
+ constructor(path,defaults){this.path=path;this.defaults=validateAutoReply({...defaults,prompt:defaults.prompt||'',recipientPrompts:defaults.recipientPrompts||{}});this.accounts={};this.targets={};}
+ async load(){try{const data=JSON.parse(await readFile(this.path,'utf8'));if(data.version!==1||!data.accounts||typeof data.accounts!=='object')throw Error('自动回复配置文件格式无效');this.targets=data.targets&&typeof data.targets==='object'?data.targets:{};for(const [id,value] of Object.entries(data.accounts))this.accounts[id]=validateAutoReply(value);}catch(error){if(error.code!=='ENOENT')throw error;}return this;}
  get(id){return Object.hasOwn(this.accounts,id)?this.accounts[id]:this.defaults;}
- async save(id,value){const settings=validateAutoReply(value),accounts={...this.accounts,[id]:settings};await mkdir(dirname(this.path),{recursive:true,mode:0o700});const temp=this.path+'.'+randomUUID()+'.tmp';await writeFile(temp,JSON.stringify({version:1,accounts}),{mode:0o600});await rename(temp,this.path);await chmod(this.path,0o600);this.accounts=accounts;return settings;}
+ getTargets(id){const rows=Object.hasOwn(this.targets,id)&&Array.isArray(this.targets[id])?this.targets[id]:[];return rows.filter(t=>t&&this.get(id).recipients.includes(t.id));}
+ async save(id,value,metadata=[]){const settings=validateAutoReply(value),accounts={...this.accounts,[id]:settings},targets={...this.targets,[id]:metadata.map(t=>({id:t.id,name:t.name||t.id,isGroup:!!t.isGroup}))};await mkdir(dirname(this.path),{recursive:true,mode:0o700});const temp=this.path+'.'+randomUUID()+'.tmp';await writeFile(temp,JSON.stringify({version:1,accounts,targets}),{mode:0o600});await rename(temp,this.path);await chmod(this.path,0o600);this.accounts=accounts;this.targets=targets;return settings;}
 }
 export async function serveReplySettings(req,res,{bridge,settings,update}){
  const respond=(status,payload)=>res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'}).end(JSON.stringify(payload));
@@ -27,7 +28,7 @@ export async function serveReplySettings(req,res,{bridge,settings,update}){
  try{
   const status=await bridge.json('status');if(!status.authenticated)return respond(401,{error:'请先登录云之家'});
   const me=await bridge.json('me');
-  if(req.method==='GET')return respond(200,{accountId:me.id,config:settings.get(me.id)});
+  if(req.method==='GET')return respond(200,{accountId:me.id,config:settings.get(me.id),targets:settings.getTargets(me.id)});
   const chunks=[];let length=0;for await(const chunk of req){length+=chunk.length;if(length>65536)return respond(413,{error:'配置最多 64 KiB'});chunks.push(chunk);}
   const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));if(input.accountId!==me.id)return respond(409,{error:'登录账号已变化，请重新加载配置'});
   const config=validateAutoReply(input.config),targets=[],recipientPrompts=Object.create(null);
@@ -39,6 +40,6 @@ export async function serveReplySettings(req,res,{bridge,settings,update}){
   }
   config.recipients=[...new Set(targets.map(t=>t.id))];config.recipientPrompts=recipientPrompts;
   const now=await bridge.json('me');if(now.id!==me.id)return respond(409,{error:'登录账号已变化，请重新加载配置'});
-  await settings.save(me.id,config);await update(config);return respond(200,{accountId:me.id,config,targets});
+  await settings.save(me.id,config,targets);await update(config);return respond(200,{accountId:me.id,config,targets});
  }catch(error){return respond(error.status===401?401:400,{error:error.status===401?'请先登录云之家':error.message||'保存失败'});}
 }

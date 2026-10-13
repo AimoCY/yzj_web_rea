@@ -112,7 +112,7 @@ def normalize_message(s,row,info):
     p=object_value(row.get('param'));kind=number(row.get('msgType'))
     mid=str(row.get('msgId') or row.get('clientMsgId') or '')
     sender=str(row.get('fromUserId') or row.get('fromPersonId') or '')
-    own=number(row.get('direction'))==1 or bool(sender and sender in (info.get('id'),info.get('wbUserId')))
+    own=number(row.get('direction'))==1 or bool(sender and sender in tuple(str(info[k]) for k in ('id','wbUserId','extId') if info.get(k)))
     result={'id':mid,'clientMsgId':row.get('clientMsgId') or '', 'type':kind,
             'content':str(row.get('content') or ''),'time':row.get('sendTime') or '',
             'senderId':sender,'sender':row.get('senderName') or row.get('userName') or row.get('fromUserName') or row.get('fromPersonName') or (info.get('name') if own else '') or '未知发送者',
@@ -280,7 +280,7 @@ def handle(h,s,path,remote,profile):
         h.respond({'card':prepare_card(s,(result.get('data') or {}).get('cardJson'))});return True
     info=profile(s)
     if path=='/api/me':
-        h.respond({'id':info.get('id'),'wbUserId':info.get('wbUserId'),'name':info.get('name','我'),'avatar':media(s,info.get('photoUrl'))});return True
+        h.respond({'id':info.get('id'),'wbUserId':info.get('wbUserId'),'extId':info.get('extId'),'name':info.get('name','我'),'avatar':media(s,info.get('photoUrl'))});return True
     if path=='/api/events':live.stream(h,s,info);return True
     if path=='/api/sync':h.respond(sync(s,remote,q.get('full',[''])[0]=='1'));return True
     target=getattr(s,'recipients',{}).get(q.get('recipientId',[''])[0])

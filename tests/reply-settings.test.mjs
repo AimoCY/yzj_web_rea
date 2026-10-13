@@ -11,8 +11,8 @@ const defaults={enabled:false,recipients:[],prompt:'通用提示词',recipientPr
 test('settings persist per account with private file permissions and strict group mention rule',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'yzj-settings-'));try{
  const path=join(dir,'settings.json'),store=await new ReplySettings(path,defaults).load();
- await store.save('a',{...defaults,enabled:true,recipients:['group'],mentionOnly:false,recipientPrompts:{group:'群提示词'}});
- const loaded=await new ReplySettings(path,defaults).load();assert.equal(loaded.get('a').mentionOnly,true);assert.equal(loaded.get('a').recipientPrompts.group,'群提示词');assert.equal(loaded.get('b').enabled,false);assert.equal((await stat(path)).mode&0o777,0o600);
+ await store.save('a',{...defaults,enabled:true,recipients:['group'],mentionOnly:false,recipientPrompts:{group:'群提示词'}},[{id:'group',name:'Persisted Test Group',isGroup:true}]);
+ const loaded=await new ReplySettings(path,defaults).load();assert.equal(loaded.get('a').mentionOnly,true);assert.equal(loaded.get('a').recipientPrompts.group,'群提示词');assert.equal(loaded.get('b').enabled,false);assert.equal(loaded.getTargets('a')[0].name,'Persisted Test Group');assert.deepEqual(loaded.getTargets('b'),[]);assert.equal((await stat(path)).mode&0o777,0o600);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
 test('invalid ranges, missing recipients and orphan prompts are rejected',()=>{

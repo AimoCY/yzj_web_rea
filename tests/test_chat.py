@@ -77,6 +77,14 @@ class ChatTest(unittest.TestCase):
         self.s.recipients['person:u']['groupId']='real-group';h.path='/api/recipient?recipientId=real-group';api.handle(h,self.s,'/api/recipient');self.assertEqual(h.data['recipient']['id'],'real-group')
         self.s.recipients={};api.handle(h,self.s,'/api/recipient');self.assertEqual(h.status,404)
         self.s.authenticated=False;api.handle(h,self.s,'/api/recipient');self.assertEqual(h.status,401)
+    def test_external_identity_is_exposed_for_mentions_and_own_messages(self):
+        class Handler:
+            path='/api/me'
+            def respond(self,data,status=200):self.data=data
+        h=Handler();info={'id':'person','wbUserId':'web','extId':'external','name':'Me'}
+        chat.handle(h,self.s,'/api/me',None,lambda s:info);self.assertEqual(h.data['extId'],'external')
+        message=chat.normalize_message(self.s,{'msgId':'m','msgType':2,'fromUserId':'external'},info)
+        self.assertTrue(message['own'])
     def test_withdrawal_metadata_is_preserved(self):
         row={'msgId':'notice','msgType':9,'param':{'withdrawMsgId':'original','withdrawMsgType':'delete'}}
         data=chat.normalize_message(self.s,row,{})

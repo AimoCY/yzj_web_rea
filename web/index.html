@@ -15,9 +15,10 @@
  <header><h1>自动回复配置</h1><button id="auto-reply-back" class="icon-button" aria-label="返回聊天">×</button></header>
  <p>选择允许自动回复的联系人或群聊。群聊必须明确 @ 本人，@ 所有人不会触发。</p>
  <form id="auto-reply-form">
- <label class="auto-switch"><input id="auto-enabled" type="checkbox">开启自动回复</label>
- <label>通用回复提示词<textarea id="auto-prompt" maxlength="8000" rows="5" placeholder="例如：你是我的工作助手，用简洁、友好的中文回复。无法确定的事情请说明。"></textarea></label>
- <fieldset><legend>选择联系人 / 群聊</legend><input id="auto-search" placeholder="搜索联系人或群聊" aria-label="搜索自动回复会话"><button id="auto-search-button" type="button">搜索</button><div id="auto-recipients" class="auto-recipients"></div><p>每个会话可设置单独提示词；留空时使用通用提示词。</p></fieldset>
+ <section class="auto-card"><div class="auto-section-heading"><h2>全局设置</h2><label class="auto-switch"><input id="auto-enabled" type="checkbox">开启自动回复</label></div><p id="auto-runtime-summary" class="auto-runtime-summary">正在检查运行状态</p>
+ <label>通用回复提示词<textarea id="auto-prompt" maxlength="8000" rows="4" placeholder="例如：你是我的工作助手，用简洁、友好的中文回复。无法确定的事情请说明。"></textarea></label><p>保存后从新消息开始处理。请等待监控就绪，再让群成员重新 @ 你测试。</p></section>
+ <section class="auto-card"><div class="auto-section-heading"><h2>搜索添加会话</h2></div><div class="auto-search-row"><input id="auto-search" placeholder="输入名称、关键词或别名" aria-label="搜索自动回复会话"><select id="auto-kind" aria-label="会话类型"><option value="all">全部</option><option value="group">群聊</option><option value="person">联系人</option></select><button id="auto-search-button" type="button">搜索</button></div><p id="auto-search-status" role="status">从现有会话中选择，或输入关键词搜索</p><div id="auto-recipients" class="auto-recipients"></div></section>
+ <section class="auto-card"><div class="auto-section-heading"><h2>已配置会话</h2><span id="auto-configured-count" class="auto-count">0 个</span></div><p>单独提示词优先于通用提示词；未填写时使用通用提示词。</p><div id="auto-configured" class="auto-configured"></div></section>
  <details><summary>高级配置</summary><div class="auto-advanced"><label>检查间隔（毫秒）<input id="auto-interval" type="number" min="1000" max="60000" required></label><label>回复超时（毫秒）<input id="auto-timeout" type="number" min="1000" max="600000" required></label><label>并发会话数<input id="auto-concurrency" type="number" min="1" max="10" required></label><label>允许的 Agent 工具（逗号分隔）<input id="auto-tools" placeholder="默认留空，仅生成回复"></label></div><p>群聊仅 @ 本人的规则始终生效。模型使用 Harness 默认模型。启用工具后，对方的消息可能触发这些工具。</p></details>
  <footer><button id="auto-save" class="primary" type="submit">保存并应用</button><button id="auto-reload" type="button">重新加载</button><span id="auto-status" role="status"></span></footer>
  </form>

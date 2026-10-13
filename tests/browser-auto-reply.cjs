@@ -15,6 +15,7 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
   else if(path==='history')data={items:[],more:false};else if(path==='read-state')data={counts:{}};else throw Error('Unexpected test API '+path);
   await route.fulfill({json:data});
  });
+ await page.route('**/plugins/yzj/plugin-status',route=>route.fulfill({json:{enabled:config.enabled,connected:true,processing:0,errors:0,conversations:{group:{result:'ready',detail:'已建立基线，等待新消息'}}}}));
  await page.goto(target);const entry=page.getByText(/^(云之家|Yunzhijia)$/);await entry.waitFor();
  try{const n=page.getByText('继续',{exact:true}).or(page.getByText('Continue',{exact:true}));await n.waitFor({timeout:5000});await n.click();}catch{}
  try{const n=page.getByText('稍后配置',{exact:true}).or(page.getByText('Configure later',{exact:true}));await n.waitFor({timeout:2000});await n.click();}catch{}
@@ -22,8 +23,9 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
  await frame.locator('#auto-enabled').check();await frame.locator('[data-recipient="person"]').check();await frame.locator('[data-recipient="group"]').check();
  await frame.locator('#auto-prompt').fill('用简洁友好的中文回复');await frame.getByLabel('测试群聊的回复提示词',{exact:true}).fill('只回答项目进度相关的问题');
  await frame.locator('#auto-save').click();await frame.locator('#auto-status').filter({hasText:'已保存并开启'}).waitFor();
+ assert.equal(await frame.locator('#auto-configured [data-recipient]').count(),2);assert.equal(await frame.locator('#auto-recipients [data-recipient]').count(),0);assert.equal(await frame.locator('#auto-configured-count').textContent(),'2 个');await frame.locator('#auto-kind').selectOption('group');assert.equal(await frame.locator('#auto-configured [data-recipient]').count(),2);await frame.locator('#auto-kind').selectOption('all');
  assert.deepEqual(saved.config.recipients,['person','group']);assert.equal(saved.config.mentionOnly,true);assert.equal(saved.config.prompt,'用简洁友好的中文回复');assert.equal(saved.config.recipientPrompts.group,'只回答项目进度相关的问题');
- await frame.locator('#auto-reload').click();await frame.locator('#auto-status').filter({hasText:'自动回复已开启'}).waitFor();assert(await frame.locator('#auto-enabled').isChecked());assert.equal(await frame.locator('#auto-prompt').inputValue(),config.prompt);
+ await frame.locator('#auto-reload').click();await frame.locator('#auto-status').filter({hasText:'自动回复已开启'}).waitFor();await frame.locator('#auto-configured').getByText('已建立基线，等待新消息',{exact:true}).waitFor();if(process.env.YZJ_TEST_SCREENSHOT)await frame.locator('#auto-reply-settings').evaluate(n=>n.scrollTop=0);if(process.env.YZJ_TEST_SCREENSHOT)await page.locator('iframe[title="云之家聊天"]').screenshot({path:process.env.YZJ_TEST_SCREENSHOT});assert(await frame.locator('#auto-enabled').isChecked());assert.equal(await frame.locator('#auto-prompt').inputValue(),config.prompt);
  await frame.locator('#auto-enabled').uncheck();await frame.locator('#auto-save').click();await frame.locator('#auto-status').filter({hasText:'自动回复已关闭'}).waitFor();assert.equal(saved.config.enabled,false);
  await frame.locator('#auto-reply-back').click();assert(await frame.locator('#chat-main').isVisible());await page.setViewportSize({width:950,height:900});assert(await frame.locator('#auto-reply-nav').isVisible());await frame.locator('#auto-reply-nav').click();await frame.locator('#auto-status').filter({hasText:'自动回复已关闭'}).waitFor();assert(await frame.locator('#auto-save').isVisible());assert.deepEqual(errors,[]);
  console.log('Harness settings browser check passed: recipient/group selection, global/per-chat prompts, save/reload, disable and return to chat.');
