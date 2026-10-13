@@ -1,6 +1,8 @@
-import {renderMarkdown} from '/api/ui/markdown';
-import {reconcileMentions,mentionPayload,mentionQuery,looksMarkdown} from '/api/ui/composer-utils';
-import {safeLink,mergeMessages,richTokens,preview,timeLabel,bytes} from '/api/ui/chat-utils';
+import {ImageCache} from './api/ui/media-cache';
+import {renderMarkdown} from './api/ui/markdown';
+import {reconcileMentions,mentionPayload,mentionQuery,looksMarkdown} from './api/ui/composer-utils';
+import {safeLink,mergeMessages,richTokens,preview,timeLabel,bytes} from './api/ui/chat-utils';
+const API_BASE=new URL('./api/',import.meta.url).pathname;
 const $=id=>document.getElementById(id);
 const el=(tag,cls,text)=>{const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;};
 const shell=document.querySelector('.shell');
@@ -13,8 +15,21 @@ let selectedMentions=[],previousText='',mentionOptions=[],mentionIndex=0,mention
 const histories=new Map(),cardCache=new Map(),memberCache=new Map();
 try{const stored=JSON.parse(sessionStorage.getItem('yzj-chat-drafts')||'{}');drafts=stored.drafts||{};restoredId=stored.selected||'';const old=JSON.parse(sessionStorage.getItem('yzj-draft')||'null');if(!restoredId&&old){restoredId=old.recipientId||'';restoredText=old.text||'';}}catch{}
 
+const imageCache=new ImageCache(),imageLoads=new Map(),imageVersions=new WeakMap();
+const imageObserver=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting){imageObserver.unobserve(entry.target);const load=imageLoads.get(entry.target);imageLoads.delete(entry.target);load?.();}}},{rootMargin:'200px'});
+function pruneImageLoads(){for(const node of imageLoads.keys()){if(!node.isConnected){imageObserver.unobserve(node);imageLoads.delete(node);}}}
+function cachedImage(node,url){
+  const version=Symbol();imageVersions.set(node,version);
+  if(!url.startsWith(API_BASE+'media?')){node.src=url;return;}
+  const hit=imageCache.peek(url);if(hit){node.src=hit;return;}
+  node.removeAttribute('src');
+  const epoch=imageCache.epoch;
+  const load=()=>imageCache.get(url).then(source=>{if(imageVersions.get(node)===version&&imageCache.epoch===epoch)node.src=source;}).catch(()=>{if(imageVersions.get(node)===version&&imageCache.epoch===epoch)node.dispatchEvent(new Event('error'));});
+  if(node.loading==='lazy'){imageLoads.set(node,load);imageObserver.observe(node);}else load();
+}
+
 async function api(path,options={}){
-  const response=await fetch('/api/'+path,options);
+  const response=await fetch(API_BASE+path,options);
   const data=await response.json();
   if(!response.ok){const error=Error(data.error||'请求失败');error.uncertain=!!data.uncertain;if(response.status===401||data.requiresLogin)expire(error.message);throw error;}
   return data;
@@ -24,13 +39,14 @@ function connection(text,status='fallback'){
   $('light').style.background=status==='connected'?'#47b995':authenticated?'#e2b35d':'#bac5d5';
 }
 function expire(message){
+  imageCache.clear();
   authenticated=false;eventSource?.close();clearTimeout(syncTimer);clearTimeout(loginTimer);
   $('login').hidden=false;$('conversation-view').hidden=true;shell.classList.remove('logged-in');
   $('login-status').textContent=message||'登录已过期，请重新扫码';connection('请重新登录');updateSend();
 }
 function avatar(node,url,name){
   node.replaceChildren();node.textContent=(name||'☁').slice(0,1);
-  if(url){const img=el('img');img.src=url;img.alt='';img.loading='lazy';img.onerror=()=>{node.textContent=(name||'☁').slice(0,1);};node.append(img);node.firstChild?.nodeType===3&&node.firstChild.remove();}
+  if(url){const img=el('img');img.alt='';img.loading='lazy';cachedImage(img,url);img.onerror=()=>{node.textContent=(name||'☁').slice(0,1);};node.append(img);node.firstChild?.nodeType===3&&node.firstChild.remove();}
 }
 function updateSend(){
   const canSend=authenticated&&recipient&&recipient.canSend!==false;
@@ -59,13 +75,14 @@ async function loginPoll(){
   catch(e){$('login-status').textContent=e.message+'，正在重试';}
   loginTimer=setTimeout(loginPoll,2500);
 }
+$('qr').onerror=()=>{clearTimeout(loginTimer);$('qr').hidden=true;$('qr-placeholder').hidden=false;$('login-status').textContent='二维码图片加载失败，请重新获取二维码；若仍失败，请检查网络或代理。';};
 $('refresh').onclick=async()=>{
   clearTimeout(loginTimer);$('refresh').disabled=true;
-  try{await api('login/start',{method:'POST'});$('qr').src='/api/login/qr-image?t='+Date.now();$('qr').hidden=false;$('qr-placeholder').hidden=true;$('login-status').textContent='请用云之家 App 扫码并确认登录';loginTimer=setTimeout(loginPoll,1500);}
+  try{await api('login/start',{method:'POST'});$('qr').src=API_BASE+'login/qr-image?t='+Date.now();$('qr').hidden=false;$('qr-placeholder').hidden=true;$('login-status').textContent='请用云之家 App 扫码并确认登录';loginTimer=setTimeout(loginPoll,1500);}
   catch(e){$('login-status').textContent=e.message;}
   finally{$('refresh').disabled=false;}
 };
-$('logout').onclick=async()=>{eventSource?.close();await api('logout',{method:'POST'});sessionStorage.removeItem('yzj-chat-drafts');sessionStorage.removeItem('yzj-draft');location.reload();};
+$('logout').onclick=async()=>{imageCache.clear();eventSource?.close();await api('logout',{method:'POST'});sessionStorage.removeItem('yzj-chat-drafts');sessionStorage.removeItem('yzj-draft');location.reload();};
 
 async function syncConversations(full=false){
   if(!authenticated)return;
@@ -87,7 +104,7 @@ function scheduleSync(){
   syncTimer=setTimeout(async()=>{await syncConversations();await refreshCurrent();await refreshReadState();scheduleSync();},document.hidden?15000:liveStatus==='connected'?10000:2500);
 }
 function startEvents(){
-  eventSource?.close();eventSource=new EventSource('/api/events');
+  eventSource?.close();eventSource=new EventSource(API_BASE+'events');
   eventSource.onmessage=event=>{try{const data=JSON.parse(event.data);connection(data.status==='connected'?'实时连接':data.reason||'自动同步中',data.status);if(['change','read'].includes(data.kind)){syncConversations();refreshCurrent();if(data.kind==='read')refreshReadState();}scheduleSync();}catch{}};
   eventSource.onerror=()=>{if(authenticated){connection('实时重连 · 自动同步中');scheduleSync();}};
 }
@@ -100,7 +117,7 @@ function renderConversations(){
   let items=query?[...conversations.filter(x=>x.name.toLocaleLowerCase().includes(query)),...searchResults]:conversations;
   items=[...new Map(items.map(x=>[x.id,x])).values()];if(unreadOnly)items=items.filter(x=>x.unread>0);
   const signature=JSON.stringify([recipient?.id,query,unreadOnly,items]);if(signature===listSignature)return;listSignature=signature;
-  const container=$('conversations'),scroll=container.scrollTop;container.replaceChildren();
+  const container=$('conversations'),scroll=container.scrollTop;container.replaceChildren();pruneImageLoads();
   for(const item of items){
     const button=el('button','conversation'+(recipient?.id===item.id?' chosen':'')+(item.pinned?' pinned':'')+(item.muted?' muted':''));button.dataset.id=item.id;button.setAttribute('aria-pressed',String(recipient?.id===item.id));button.ariaLabel=item.name;button.title=item.name+'\n'+preview(item);button.disabled=busy;
     const photo=el('span','avatar');avatar(photo,item.avatar,item.name);
@@ -174,7 +191,7 @@ $('new-messages').onclick=scrollBottom;
 $('messages').onscroll=()=>{if(isAtBottom())$('new-messages').hidden=true;if($('messages').scrollTop<15)loadOlder();};
 function renderHistoryButton(){const node=$('history-load'),cache=recipient&&histories.get(recipient.id);if(node&&cache){node.textContent=cache.loading?'正在加载历史消息…':cache.more?'加载更早的消息':'已到达最早的消息';node.disabled=cache.loading||!cache.more;}}
 function renderMessages(bottom=false){
-  const container=$('messages'),cache=recipient&&histories.get(recipient.id);container.replaceChildren();
+  const container=$('messages'),cache=recipient&&histories.get(recipient.id);container.replaceChildren();pruneImageLoads();
   if(!cache)return;
   const more=el('button','load-history');more.id='history-load';more.onclick=loadOlder;container.append(more);renderHistoryButton();
   if(!cache.items.length){container.append(el('p','empty',cache.loading?'正在加载消息…':cache.loaded?'暂无消息，发送第一条消息开始对话':'正在读取消息记录…'));return;}
@@ -194,7 +211,7 @@ function renderMessage(message){
   const picture=el('span','avatar message-avatar');avatar(picture,message.avatar,message.own?me.name:message.sender);
   const body=el('div','message-body'),bubble=el('div','bubble'+(message.attachments?.length?' attachment-bubble':''));
   body.append(el('div','message-sender',message.own?(me.name||'我'):message.sender));
-  if(message.reply){const quote=el('div','quote',message.reply.sender+'：'+message.reply.text);quote.title='定位引用消息';quote.onclick=()=>jumpMessage(message.reply.id);if(message.reply.image){const image=el('img');image.src=message.reply.image;image.alt='引用图片';quote.append(image);}bubble.append(quote);}
+  if(message.reply){const quote=el('div','quote',message.reply.sender+'：'+message.reply.text);quote.title='定位引用消息';quote.onclick=()=>jumpMessage(message.reply.id);if(message.reply.image){const image=el('img');cachedImage(image,message.reply.image);image.alt='引用图片';quote.append(image);}bubble.append(quote);}
   if(message.attachments?.length){for(const attachment of message.attachments)bubble.append(renderAttachment(attachment));}
   else if([2,23].includes(message.type)){const text=el('div','message-text');if(!message.segments?.length&&looksMarkdown(message.content)){renderMarkdown(text,message.content);const toggle=el('button','markdown-source-toggle','查看原文');let source=false;toggle.onclick=()=>{source=!source;toggle.textContent=source?'Markdown 展示':'查看原文';text.classList.toggle('markdown-body',!source);if(source)text.textContent=message.content;else renderMarkdown(text,message.content);};bubble.append(text,toggle);}else{renderRich(text,message);bubble.append(text);}}
   else if(message.type===25&&message.card){const card=el('div','adaptive-card');renderAdaptive(card,cardCache.get(message.id)||message.card);bubble.append(card);if(!cardCache.has(message.id))api('card?messageId='+encodeURIComponent(message.id)).then(data=>{cardCache.set(message.id,data.card);if(card.isConnected){card.replaceChildren();renderAdaptive(card,data.card);}}).catch(()=>{});renderFallback(bubble,message);}
@@ -207,7 +224,7 @@ function renderMessage(message){
 }
 function renderRich(node,message){
   for(const token of richTokens(message)){
-    if(token.type==='image'&&token.url){const img=el('img','rich-image');img.src=token.url;img.alt='图片';img.loading='lazy';img.onclick=()=>showImage(token.original||token.url,'图片');node.append(img);}
+    if(token.type==='image'&&token.url){const img=el('img','rich-image');img.alt='图片';img.loading='lazy';cachedImage(img,token.url);img.onclick=()=>showImage(token.original||token.url,'图片');node.append(img);}
     else if(token.type==='link'){const url=safeLink(token.url||token.data||token.text);if(url){const link=el('a','',token.text);link.href=url;link.target='_blank';link.rel='noopener noreferrer';node.append(link);}else node.append(document.createTextNode(token.text));}
     else if(['at','at_all'].includes(token.type))node.append(el('span','mention-token',token.text));
     else if(token.type==='bold')node.append(el('strong','',token.text));
@@ -217,7 +234,7 @@ function renderRich(node,message){
 function plainEmoji(node,text){let pos=0;for(const match of text.matchAll(/\[([^\[\]]+)\]/g)){node.append(document.createTextNode(text.slice(pos,match.index)));if(emojis[match[1]]){const img=el('img','default-emoji');img.src=emojis[match[1]];img.alt=match[0];img.title=match[1];node.append(img);}else node.append(document.createTextNode(match[0]));pos=match.index+match[0].length;}node.append(document.createTextNode(text.slice(pos)));}
 function linkify(node,text){const regex=/https?:\/\/[^\s<>"']+/g;let pos=0;for(const match of text.matchAll(regex)){plainEmoji(node,text.slice(pos,match.index));const url=safeLink(match[0]);if(url){const a=el('a','',match[0]);a.href=url;a.target='_blank';a.rel='noopener noreferrer';node.append(a);}else node.append(document.createTextNode(match[0]));pos=match.index+match[0].length;}plainEmoji(node,text.slice(pos));}
 function renderAttachment(a){
-  if(a.kind==='image'){const image=el('img','message-image');image.src=a.url;image.alt=a.name;image.loading='lazy';if(a.width&&a.height){image.style.aspectRatio=a.width+'/'+a.height;image.style.width=Math.min(a.width,340)+'px';}image.onclick=()=>showImage(a.original||a.url,a.name,a.download);image.onload=()=>{if(isAtBottom())scrollBottom();};image.onerror=()=>{image.alt='图片暂时无法加载，点击查看原图';image.classList.add('unavailable');};return image;}
+  if(a.kind==='image'){const image=el('img','message-image');image.alt=a.name;image.loading='lazy';cachedImage(image,a.url);if(a.width&&a.height){image.style.aspectRatio=a.width+'/'+a.height;image.style.width=Math.min(a.width,340)+'px';}image.onclick=()=>showImage(a.original||a.url,a.name,a.download);image.onload=()=>{if(isAtBottom())scrollBottom();};image.onerror=()=>{image.alt='图片暂时无法加载，点击查看原图';image.classList.add('unavailable');};return image;}
   if(['audio','video'].includes(a.kind)){const wrap=el('div');const player=el(a.kind,'message-media');player.controls=true;player.preload='none';player.src=a.original||a.url;wrap.append(player);if(a.kind==='audio'){player.style.width='250px';wrap.append(el('small','',a.name+(a.duration?' · '+a.duration+' 秒':'')));if(a.recognizedText)wrap.append(el('p','',a.recognizedText));}return wrap;}
   const card=el('a','file-card');card.href=a.download||a.original||a.url;card.download=a.name;
   const ext=a.name.split('.').pop();card.append(el('span','file-icon',ext.length<8?ext:'FILE'));const text=el('span');text.append(el('strong','',a.name),el('small','',bytes(a.size)+' · 点击下载'));card.append(text);
@@ -230,7 +247,7 @@ function renderAdaptive(node,data,depth=0){
   for(const item of items){
     if(!item||typeof item!=='object')continue;
     if(['TextBlock','RichTextBlock'].includes(item.type)){const text=el(item.weight==='Bolder'?'strong':'p','');renderRich(text,{content:item.text||(item.inlines||[]).map(x=>typeof x==='string'?x:x.text||'').join('')});node.append(text);}
-    else if(item.type==='Image'&&item.url){const image=el('img','rich-image');image.src=item.url;image.alt=item.altText||'卡片图片';image.loading='lazy';node.append(image);}
+    else if(item.type==='Image'&&item.url){const image=el('img','rich-image');image.alt=item.altText||'卡片图片';image.loading='lazy';cachedImage(image,item.url);node.append(image);}
     else if(item.type==='FactSet'){const list=el('dl');for(const fact of item.facts||[])list.append(el('dt','',fact.title||''),el('dd','',fact.value||''));node.append(list);}
     else if(['Container','Column','ColumnSet'].includes(item.type)){const wrap=el('div',item.type==='ColumnSet'?'card-columns':'');renderAdaptive(wrap,item.items||item.columns||[],depth+1);node.append(wrap);}
     else if(item.type==='Action.OpenUrl'){const url=safeLink(item.url);if(url){const link=el('a','card-action',item.title||'打开详情');link.href=url;link.target='_blank';link.rel='noopener noreferrer';node.append(link);}}
@@ -251,7 +268,7 @@ function renderCard(message){
   renderFallback(card,message);return card;
 }
 function renderFallback(node,message){const data=message.param;if(!data||!Object.keys(data).length)return;const details=el('details','unknown-message');details.append(el('summary','','查看完整消息字段'),el('pre','',JSON.stringify(data,null,2)));node.append(details);}
-function showImage(url,name,download){$('full-image').src=url;$('full-image').alt=name;$('image-name').textContent=name;$('image-download').href=download||url;$('image-download').download=name;$('image-viewer').showModal();}
+function showImage(url,name,download){cachedImage($('full-image'),url);$('full-image').alt=name;$('image-name').textContent=name;$('image-download').href=download||url;$('image-download').download=name;$('image-viewer').showModal();}
 $('document-close').onclick=()=>$('document-viewer').close();
 $('image-close').onclick=()=>$('image-viewer').close();$('image-viewer').onclick=e=>{if(e.target===$('image-viewer'))$('image-viewer').close();};
 function jumpMessage(id){const node=[...$('messages').querySelectorAll('[data-message-id]')].find(x=>x.dataset.messageId===id);if(!node){status('引用消息尚未加载，可以向前加载历史记录');return;}node.scrollIntoView({block:'center'});node.classList.add('highlight');setTimeout(()=>node.classList.remove('highlight'),1800);}
@@ -372,4 +389,4 @@ $('screenshot-add').onclick=async()=>{
 };
 
 api('ui/emojis').then(data=>{emojis=data;}).catch(()=>{});
-api('status').then(s=>{if(s.authenticated)connected();else if(s.pendingToken){$('qr').src='/api/login/qr-image?t='+Date.now();$('qr').hidden=false;$('qr-placeholder').hidden=true;loginPoll();}}).catch(e=>$('login-status').textContent=e.message);
+api('status').then(s=>{if(s.authenticated)connected();else if(s.pendingToken){$('qr').src=API_BASE+'login/qr-image?t='+Date.now();$('qr').hidden=false;$('qr-placeholder').hidden=true;loginPoll();}}).catch(e=>$('login-status').textContent=e.message);

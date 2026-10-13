@@ -53,6 +53,21 @@ class ChatTest(unittest.TestCase):
     def test_media_rejects_external_and_credentialed_urls(self):
         for url in ['https://evil.test/img','javascript:alert(1)','http://www.yunzhijia.com/a','https://user@www.yunzhijia.com/a']:
             self.assertEqual(chat.media(self.s,url),'')
+    def test_official_sender_name_is_used_for_text_and_image_history(self):
+        def remote(s,path,**kw):
+            return {'success':True,'data':{'list':[
+                {'msgId':'text','msgType':2,'fromUserId':'other','senderName':'测试同事','content':'你好'},
+                {'msgId':'image','msgType':8,'fromUserId':'other','senderName':'测试同事','param':{'file_id':'f','ftype':1}}]}}
+        data=chat.history(self.s,{'id':'g','groupId':'g'},remote,{'id':'self','name':'自己'})
+        self.assertEqual([x['sender'] for x in data['items']],['测试同事','测试同事'])
+        self.assertTrue(all(x['senderId']=='other' and not x['own'] for x in data['items']))
+    def test_sender_name_priority_and_legacy_fallbacks(self):
+        data=chat.normalize_message(self.s,{'msgId':'m','senderName':'当前姓名','fromUserName':'旧姓名','msgType':2},{})
+        self.assertEqual(data['sender'],'当前姓名')
+        data=chat.normalize_message(self.s,{'msgId':'m','fromPersonName':'旧接口姓名','msgType':2},{})
+        self.assertEqual(data['sender'],'旧接口姓名')
+        data=chat.normalize_message(self.s,{'msgId':'m','direction':1,'msgType':2},{'name':'自己'})
+        self.assertEqual(data['sender'],'自己')
     def test_withdrawal_metadata_is_preserved(self):
         row={'msgId':'notice','msgType':9,'param':{'withdrawMsgId':'original','withdrawMsgType':'delete'}}
         data=chat.normalize_message(self.s,row,{})

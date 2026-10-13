@@ -4,6 +4,8 @@
 
 这是独立的非官方项目，与云之家及其运营方没有隶属关系。使用当前官方网页版内部接口，协议兼容性可能随上游更新变化。项目面向本机单用户使用，不支持直接部署为公网或多租户服务。
 
+`codex/web-optimizations` 分支基于 `main`，包含从插件开发中移植的发送人、图片缓存和登录提示修复，仍可直接使用 Python 独立运行。移植范围、缓存规则和验证方式见 [网页版优化说明](docs/web-optimizations.md)。DeepSeek Harness 插件及 AI 自动回复保留在 `feature/deepseek-harness-plugin` 分支。
+
 ## 功能
 
 - **聊天列表**：分页读取内部、外部会话，显示头像、最新消息摘要、时间、未读数、@ 提醒、置顶和免打扰状态；支持联系人与群组搜索。
@@ -12,6 +14,7 @@
 - **消息展示**：文字、默认表情、富文本、图片/GIF、文件、语音、视频、引用和常见业务卡片；支持原图预览与下载。
 - **消息发送**：文字、@ 群成员、图片和普通文件附件；支持粘贴、拖放和多附件队列；仅在取得服务端 `msgId` 后显示发送成功。
 - **截图与 Markdown**：浏览器授权截图、区域裁剪并加入图片队列；Markdown 消息渲染、草稿预览和 `.md` 附件预览。
+- **图片缓存与名称**：图片、头像、引用和卡片图片使用有容量上限的内存缓存，切换聊天时复用；消息按官方 `senderName` 字段显示发送人；二维码加载失败时提供重新获取提示。
 - **阅读与编辑**：按会话保存文字草稿、新消息提示、会话成员资料和窄屏布局。
 
 ## 界面预览
@@ -48,7 +51,7 @@
 python3 server.py
 ```
 
-Windows 可使用 `py -3 server.py`。macOS 也可双击 `start.command` 或运行 `./start.command`；该脚本会尝试读取系统 HTTPS 代理配置。
+Windows 可使用 `py -3 server.py`。macOS 也可双击 `start.command` 或运行 `./start.command`；与直接启动一样默认直连；需要代理时显式设置 `YZJ_PROXY`。
 
 打开 [本机聊天页面](http://127.0.0.1:8765)，点击“获取登录二维码”，用云之家手机 App 扫码并确认。登录后选择会话或搜索联系人，查看消息或发送文字、图片。
 
@@ -155,8 +158,10 @@ node --test tests/*.test.mjs
 
 ```sh
 node tests/browser-composer.cjs
+node tests/browser-web-cache.cjs
 # 本机已有 Chrome 时，可在 macOS / Linux 设置：
 PLAYWRIGHT_CHANNEL=chrome node tests/browser-composer.cjs
+node tests/browser-web-cache.cjs
 ```
 
 修改接口时请同步对应实现说明。提交 Issue、截图或日志前移除 Cookie、token、个人/企业 ID、真实消息、签名下载链接和其他账号信息。发布源码前的具体检查见 [公开源码检查说明](docs/open-source-checklist.md)。
