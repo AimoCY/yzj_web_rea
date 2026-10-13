@@ -1,0 +1,7 @@
+- insert:
+    - id: yunzhijia
+      name: dsh-plugin-yunzhijia
+      config:
+        autoReply:
+          enabled: false
+          recipients: []

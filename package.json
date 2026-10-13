@@ -1,0 +1,75 @@
+{
+  "name": "dsh-plugin-yunzhijia",
+  "version": "0.1.0",
+  "description": "Yunzhijia personal-account chat, tools and automatic replies for DeepSeek Harness",
+  "type": "module",
+  "main": "plugin/index.mjs",
+  "exports": {
+    ".": "./plugin/index.mjs",
+    "./client": "./plugin/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "slots",
+        "locale",
+        "layout"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "plugin/",
+    "web/",
+    "server.py",
+    "api.py",
+    "chat.py",
+    "live.py",
+    "cordis.patch.yml",
+    "LICENSE",
+    "README.md",
+    "docs/harness-plugin.md",
+    "scripts/build-plugin.mjs"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AimoCY/yzj_web_rea.git"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "yunzhijia"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:python": "python3 -m unittest discover -s tests -v",
+    "pack:plugin": "npm pack",
+    "check": "node --check plugin/index.mjs && node --check plugin/client.mjs",
+    "build": "node scripts/build-plugin.mjs",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.5-alpha.1",
+    "@deepseek-ai/dsh-llm": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-alpha.2",
+    "react": "^18.2.0"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "3.18.5-alpha.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.5-alpha.1",
+    "@deepseek-ai/dsh": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-llm": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-alpha.2",
+    "react": "18.3.1"
+  }
+}

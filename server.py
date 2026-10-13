@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parent
 PORT = int(os.environ.get('PORT', '8765'))
 ORIGIN = 'https://www.yunzhijia.com'
 SESSIONS = {}
+PLUGIN_SECRET = os.environ.get('YZJ_PLUGIN_SECRET', '')
+SHARED_SESSION = os.environ.get('YZJ_SHARED_SESSION', '')
 
 class Session:
     def __init__(self):
@@ -50,7 +52,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def session(self):
         cookies = dict(part.strip().split('=', 1) for part in self.headers.get('Cookie', '').split(';') if '=' in part)
-        sid = cookies.get('yzj_local')
+        sid = SHARED_SESSION if PLUGIN_SECRET and SHARED_SESSION else cookies.get('yzj_local')
         if sid not in SESSIONS:
             sid = secrets.token_urlsafe(32)
             SESSIONS[sid] = Session()
@@ -65,13 +67,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
-        if getattr(self, 'new_sid', None):
+        if getattr(self, 'new_sid', None) and not PLUGIN_SECRET:
             self.send_header('Set-Cookie', f'yzj_local={self.new_sid}; HttpOnly; SameSite=Strict; Path=/')
         self.end_headers()
         self.wfile.write(body)
 
+    def plugin_authorized(self):
+        return not PLUGIN_SECRET or secrets.compare_digest(self.headers.get('X-YZJ-Plugin-Key',''),PLUGIN_SECRET)
+
     def do_GET(self):
         try:
+            if not self.plugin_authorized():return self.respond({'error':'Unauthorized'},401)
             if self.headers.get('Host') not in {f'127.0.0.1:{PORT}', f'localhost:{PORT}'}:
                 return self.respond({'error': 'Invalid host'}, 403)
             s = self.session()
@@ -103,7 +109,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            if self.headers.get('Host') not in {f'127.0.0.1:{PORT}', f'localhost:{PORT}'} or self.headers.get('Origin') not in {f'http://127.0.0.1:{PORT}', f'http://localhost:{PORT}'}:
+            if not self.plugin_authorized():return self.respond({'error':'Unauthorized'},401)
+            if self.headers.get('Host') not in {f'127.0.0.1:{PORT}', f'localhost:{PORT}'} or (not PLUGIN_SECRET and self.headers.get('Origin') not in {f'http://127.0.0.1:{PORT}', f'http://localhost:{PORT}'}):
                 return self.respond({'error': 'Invalid origin'}, 403)
             s = self.session()
             if self.dynamic(s, self.path):

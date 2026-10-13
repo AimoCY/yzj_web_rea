@@ -1,6 +1,7 @@
-import {renderMarkdown} from '/api/ui/markdown';
-import {reconcileMentions,mentionPayload,mentionQuery,looksMarkdown} from '/api/ui/composer-utils';
-import {safeLink,mergeMessages,richTokens,preview,timeLabel,bytes} from '/api/ui/chat-utils';
+import {renderMarkdown} from './api/ui/markdown';
+import {reconcileMentions,mentionPayload,mentionQuery,looksMarkdown} from './api/ui/composer-utils';
+import {safeLink,mergeMessages,richTokens,preview,timeLabel,bytes} from './api/ui/chat-utils';
+const API_BASE=new URL('./api/',import.meta.url).pathname;
 const $=id=>document.getElementById(id);
 const el=(tag,cls,text)=>{const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;};
 const shell=document.querySelector('.shell');
@@ -14,7 +15,7 @@ const histories=new Map(),cardCache=new Map(),memberCache=new Map();
 try{const stored=JSON.parse(sessionStorage.getItem('yzj-chat-drafts')||'{}');drafts=stored.drafts||{};restoredId=stored.selected||'';const old=JSON.parse(sessionStorage.getItem('yzj-draft')||'null');if(!restoredId&&old){restoredId=old.recipientId||'';restoredText=old.text||'';}}catch{}
 
 async function api(path,options={}){
-  const response=await fetch('/api/'+path,options);
+  const response=await fetch(API_BASE+path,options);
   const data=await response.json();
   if(!response.ok){const error=Error(data.error||'请求失败');error.uncertain=!!data.uncertain;if(response.status===401||data.requiresLogin)expire(error.message);throw error;}
   return data;
@@ -61,7 +62,7 @@ async function loginPoll(){
 }
 $('refresh').onclick=async()=>{
   clearTimeout(loginTimer);$('refresh').disabled=true;
-  try{await api('login/start',{method:'POST'});$('qr').src='/api/login/qr-image?t='+Date.now();$('qr').hidden=false;$('qr-placeholder').hidden=true;$('login-status').textContent='请用云之家 App 扫码并确认登录';loginTimer=setTimeout(loginPoll,1500);}
+  try{await api('login/start',{method:'POST'});$('qr').src=API_BASE+'login/qr-image?t='+Date.now();$('qr').hidden=false;$('qr-placeholder').hidden=true;$('login-status').textContent='请用云之家 App 扫码并确认登录';loginTimer=setTimeout(loginPoll,1500);}
   catch(e){$('login-status').textContent=e.message;}
   finally{$('refresh').disabled=false;}
 };
@@ -87,7 +88,7 @@ function scheduleSync(){
   syncTimer=setTimeout(async()=>{await syncConversations();await refreshCurrent();await refreshReadState();scheduleSync();},document.hidden?15000:liveStatus==='connected'?10000:2500);
 }
 function startEvents(){
-  eventSource?.close();eventSource=new EventSource('/api/events');
+  eventSource?.close();eventSource=new EventSource(API_BASE+'events');
   eventSource.onmessage=event=>{try{const data=JSON.parse(event.data);connection(data.status==='connected'?'实时连接':data.reason||'自动同步中',data.status);if(['change','read'].includes(data.kind)){syncConversations();refreshCurrent();if(data.kind==='read')refreshReadState();}scheduleSync();}catch{}};
   eventSource.onerror=()=>{if(authenticated){connection('实时重连 · 自动同步中');scheduleSync();}};
 }
@@ -372,4 +373,4 @@ $('screenshot-add').onclick=async()=>{
 };
 
 api('ui/emojis').then(data=>{emojis=data;}).catch(()=>{});
-api('status').then(s=>{if(s.authenticated)connected();else if(s.pendingToken){$('qr').src='/api/login/qr-image?t='+Date.now();$('qr').hidden=false;$('qr-placeholder').hidden=true;loginPoll();}}).catch(e=>$('login-status').textContent=e.message);
+api('status').then(s=>{if(s.authenticated)connected();else if(s.pendingToken){$('qr').src=API_BASE+'login/qr-image?t='+Date.now();$('qr').hidden=false;$('qr-placeholder').hidden=true;loginPoll();}}).catch(e=>$('login-status').textContent=e.message);

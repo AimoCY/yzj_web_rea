@@ -23,3 +23,7 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# Local Harness profiles and packed release artifacts.
+.harness/
+*.tgz
