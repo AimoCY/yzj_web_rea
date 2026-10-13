@@ -33,7 +33,7 @@ function cachedImage(node,url){
 async function api(path,options={}){
   const response=await fetch(API_BASE+path,options);
   const data=await response.json();
-  if(!response.ok){const error=Error(data.error||'请求失败');error.uncertain=!!data.uncertain;if(response.status===401||data.requiresLogin)expire(error.message);throw error;}
+  if(!response.ok){const error=Error(data.error||'请求失败');error.status=response.status;error.uncertain=!!data.uncertain;if(response.status===401||data.requiresLogin)expire(error.message);throw error;}
   return data;
 }
 function connection(text,status='fallback'){

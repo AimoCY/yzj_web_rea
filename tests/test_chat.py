@@ -68,6 +68,15 @@ class ChatTest(unittest.TestCase):
         self.assertEqual(data['sender'],'旧接口姓名')
         data=chat.normalize_message(self.s,{'msgId':'m','direction':1,'msgType':2},{'name':'自己'})
         self.assertEqual(data['sender'],'自己')
+    def test_recipient_lookup_uses_only_current_authenticated_session(self):
+        class Handler:
+            path='/api/recipient?recipientId=person%3Au'
+            def respond(self,data,status=200):self.data=data;self.status=status
+        h=Handler();self.s.recipients={'person:u':{'id':'person:u','userId':'u','name':'Test Contact'}}
+        self.assertTrue(api.handle(h,self.s,'/api/recipient'));self.assertEqual(h.data['recipient']['id'],'person:u')
+        self.s.recipients['person:u']['groupId']='real-group';h.path='/api/recipient?recipientId=real-group';api.handle(h,self.s,'/api/recipient');self.assertEqual(h.data['recipient']['id'],'real-group')
+        self.s.recipients={};api.handle(h,self.s,'/api/recipient');self.assertEqual(h.status,404)
+        self.s.authenticated=False;api.handle(h,self.s,'/api/recipient');self.assertEqual(h.status,401)
     def test_withdrawal_metadata_is_preserved(self):
         row={'msgId':'notice','msgType':9,'param':{'withdrawMsgId':'original','withdrawMsgType':'delete'}}
         data=chat.normalize_message(self.s,row,{})

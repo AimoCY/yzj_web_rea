@@ -473,6 +473,17 @@ def _handle(h,s,path):
             s.authenticated = True
         h.respond({'authenticated':s.authenticated,'pendingToken':bool(s.token),'errorCode':result.get('errorCode',result.get('errorcode')),'error':result.get('error')})
         return True
+    if path == '/api/recipient':
+        if not s.authenticated:
+            h.respond({'error':'请先扫码登录'},401)
+        else:
+            rid=urllib.parse.parse_qs(urllib.parse.urlparse(h.path).query).get('recipientId',[''])[0]
+            known=getattr(s,'recipients',{})
+            target=known.get(rid) or next((t for t in known.values() if t.get('groupId')==rid),None)
+            if target:
+                target={**target,'id':rid};known[rid]=target;h.respond({'recipient':target})
+            else:h.respond({'error':'请选择当前账号已查询到的会话'},404)
+        return True
     if path == '/api/conversations':
         if not s.authenticated:
             h.respond({'error':'请先扫码登录'},401)

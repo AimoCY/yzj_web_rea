@@ -37,3 +37,15 @@ test('group requires direct mention even with legacy mentionOnly=false; only sel
  const config={...defaults,enabled:true,recipients:['g'],mentionOnly:false,recipientPrompts:{g:'group policy'}};
  const auto=new AutoReplyController(bridge,config,async(_target,text,_me,_signal,settings)=>{turns++;received={text,settings};return 'reply';});await auto.tick();await auto.tick();await Promise.all([...auto.jobs]);assert.equal(turns,1);assert(!received.text.includes('all-only-message'));assert(received.text.includes('direct-mention-message'));assert.equal(received.settings.recipientPrompts.g,'group policy');await auto.close();
 });
+test('a discovered contact resolves from the authenticated registry instead of searching its ID as a name',async()=>{
+ const {YunzhijiaBridge}=await import('../plugin/bridge.mjs');const bridge=new YunzhijiaBridge({}),calls=[];
+ bridge.json=async path=>{calls.push(path);if(path==='recipient?recipientId=person%3Au')return {recipient:{id:'person:u',userId:'u',name:'Contact'}};throw Error('Unexpected name search');};
+ assert.equal((await bridge.target('person:u')).name,'Contact');assert.equal(calls.length,1);
+});
+test('saving a searched contact persists the real group ID and remaps its custom prompt for restart',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'yzj-contact-save-')),store=await new ReplySettings(join(dir,'s.json'),defaults).load();
+ const bridge={json:async p=>p==='status'?{authenticated:true}:p==='me'?{id:'a'}:{groupId:'real-group'},target:async()=>({id:'person:u',userId:'u',name:'Contact'})};
+ const server=createServer((req,res)=>serveReplySettings(req,res,{bridge,settings:store,update:async()=>{}}));server.listen(0,'127.0.0.1');await once(server,'listening');const origin='http://127.0.0.1:'+server.address().port;
+ try{const response=await fetch(origin,{method:'POST',headers:{Origin:origin},body:JSON.stringify({accountId:'a',config:{...defaults,enabled:true,recipients:['person:u'],recipientPrompts:{'person:u':'contact policy'}}})});assert.equal(response.status,200);const data=await response.json();assert.deepEqual(data.config.recipients,['real-group']);assert.equal(data.config.recipientPrompts['real-group'],'contact policy');assert.equal(data.targets[0].name,'Contact');}
+ finally{server.closeAllConnections();await new Promise(r=>server.close(r));await rm(dir,{recursive:true,force:true});}
+});

@@ -30,8 +30,15 @@ export async function serveReplySettings(req,res,{bridge,settings,update}){
   if(req.method==='GET')return respond(200,{accountId:me.id,config:settings.get(me.id)});
   const chunks=[];let length=0;for await(const chunk of req){length+=chunk.length;if(length>65536)return respond(413,{error:'配置最多 64 KiB'});chunks.push(chunk);}
   const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));if(input.accountId!==me.id)return respond(409,{error:'登录账号已变化，请重新加载配置'});
-  const config=validateAutoReply(input.config);for(const id of config.recipients){const target=await bridge.target(id);if(target.canSend===false)throw Error('所选会话不支持发送消息');}
+  const config=validateAutoReply(input.config),targets=[],recipientPrompts=Object.create(null);
+  for(const id of config.recipients){
+   const target=await bridge.target(id);if(target.canSend===false)throw Error('所选会话不支持发送消息');
+   let canonical=target.groupId||id;
+   if(id.startsWith('person:')&&!target.groupId){const history=await bridge.json('history?'+new URLSearchParams({recipientId:id,count:'1'}));if(!history.groupId)throw Error('未取得联系人的会话，请先打开该联系人聊天后重试');canonical=history.groupId;}
+   targets.push({...target,id:canonical});if(config.recipientPrompts[id])recipientPrompts[canonical]=config.recipientPrompts[id];
+  }
+  config.recipients=[...new Set(targets.map(t=>t.id))];config.recipientPrompts=recipientPrompts;
   const now=await bridge.json('me');if(now.id!==me.id)return respond(409,{error:'登录账号已变化，请重新加载配置'});
-  await settings.save(me.id,config);await update(config);return respond(200,{accountId:me.id,config});
+  await settings.save(me.id,config);await update(config);return respond(200,{accountId:me.id,config,targets});
  }catch(error){return respond(error.status===401?401:400,{error:error.status===401?'请先登录云之家':error.message||'保存失败'});}
 }

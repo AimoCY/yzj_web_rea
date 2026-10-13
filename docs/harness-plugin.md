@@ -1,5 +1,9 @@
 # DeepSeek Harness 插件
 
+0.2.1 修复自动回复配置搜索和保存：输入关键词自动搜索，保留服务端别名匹配结果；保存新联系人时使用当前登录会话的已查询目标，并读取真实会话 ID 后持久化，避免把联系人 ID 当名称搜索。会话列表读取失败时保留已加载配置，仍可重新搜索和编辑。
+
+若配置区显示 `Not found` 且保存按钮灰色，表示配置接口尚未加载，常见于进程仍使用旧版后端。升级后应完整重启 Harness 一次；仅刷新浏览器或禁用再启用插件可能仍复用旧模块。新版会对此给出明确提示。浏览器回归覆盖此错误状态、重新加载恢复，以及关键词与显示名称不同的搜索结果。
+
 目标是官方 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，已验证 npm 版本 `0.2.1-alpha.2`。源码协议对照提交为 `d743267388641bc76f17c45ce8b4c231aed1d32c`。官方规范包括 [插件入门](https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/user/develop/basic/index.md)、[打包安装](https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/user/develop/basic/publish.md) 和 [工具定义](https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/user/develop/basic/tool.md)。
 
 ## 架构
