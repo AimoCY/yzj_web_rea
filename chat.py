@@ -110,6 +110,10 @@ def sync(s,remote,full=False):
 
 def normalize_message(s,row,info):
     p=object_value(row.get('param'));kind=number(row.get('msgType'))
+    # Received @ messages can omit notifyTo while retaining typed recipients.
+    if 'notifyTo' not in p and number(p.get('notifyType'))==1 and isinstance(p.get('desc'),list):
+        at_ids=[str(d['data']) for d in p['desc'] if isinstance(d,dict) and d.get('type')=='at' and isinstance(d.get('data'),(str,int)) and not isinstance(d.get('data'),bool)]
+        if at_ids:p={**p,'notifyTo':list(dict.fromkeys(at_ids))}
     mid=str(row.get('msgId') or row.get('clientMsgId') or '')
     sender=str(row.get('fromUserId') or row.get('fromPersonId') or '')
     own=number(row.get('direction'))==1 or bool(sender and sender in tuple(str(info[k]) for k in ('id','wbUserId','extId') if info.get(k)))

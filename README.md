@@ -52,7 +52,7 @@ npm pack
 
 ```sh
 dsh --profile yzj --from-default-profile web --dump-config
-dsh plugin --profile yzj add /absolute/path/dsh-plugin-yunzhijia-0.2.2.tgz
+dsh plugin --profile yzj add /absolute/path/dsh-plugin-yunzhijia-0.2.3.tgz
 dsh --profile yzj --no-open
 ```
 

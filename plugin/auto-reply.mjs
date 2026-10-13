@@ -3,7 +3,12 @@ export function identityIds(me){return new Set([me.id,me.wbUserId,me.extId].filt
 export function directlyMentioned(message,me){
  const ids=identityIds(me);let targets=message.param?.notifyTo;
  if(typeof targets==='string'){try{const parsed=JSON.parse(targets);targets=Array.isArray(parsed)?parsed:[parsed];}catch{targets=targets.split(',').map(x=>x.trim());}}
- return Array.isArray(targets)&&targets.some(id=>(typeof id==='string'||typeof id==='number')&&ids.has(String(id)));
+ if(Array.isArray(targets)&&targets.some(id=>(typeof id==='string'||typeof id==='number')&&ids.has(String(id))))return true;
+ // Received messages may omit notifyTo; an active notification plus a typed
+ // at descriptor carries the recipient ID. Names and forwarded text are not proof.
+ const param=message.param||{};
+ return Number(param.notifyType)===1&&Array.isArray(param.desc)&&param.desc.some(d=>d&&d.type==='at'&&(typeof d.data==='string'||typeof d.data==='number')&&ids.has(String(d.data)));
+
 }
 export function eligible(message,config,me){
  if(message.own||message.withdrawn||[0,9].includes(message.type)||!message.id||identityIds(me).has(String(message.senderId)))return false;

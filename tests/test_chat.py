@@ -85,6 +85,12 @@ class ChatTest(unittest.TestCase):
         chat.handle(h,self.s,'/api/me',None,lambda s:info);self.assertEqual(h.data['extId'],'external')
         message=chat.normalize_message(self.s,{'msgId':'m','msgType':2,'fromUserId':'external'},info)
         self.assertTrue(message['own'])
+    def test_received_at_descriptors_restore_omitted_notification_targets(self):
+        param={'notifyType':1,'desc':[{'type':'at','data':'me','start':0,'length':4},{'type':'at_all','data':'all'},{'type':'at','data':'me'}]}
+        message=chat.normalize_message(self.s,{'msgId':'m','msgType':2,'param':param},{})
+        self.assertEqual(message['param']['notifyTo'],['me']);self.assertNotIn('notifyTo',param)
+        forwarded=chat.normalize_message(self.s,{'msgId':'f','msgType':23,'param':{'desc':param['desc']}},{})
+        self.assertNotIn('notifyTo',forwarded['param'])
     def test_withdrawal_metadata_is_preserved(self):
         row={'msgId':'notice','msgType':9,'param':{'withdrawMsgId':'original','withdrawMsgType':'delete'}}
         data=chat.normalize_message(self.s,row,{})
