@@ -277,13 +277,36 @@ def reconcile(s,cid,op):
                 return op['receipt']
     return None
 
-def deliver(h,s,image):
+def mention_param(s,target,content,mentions):
+    if not isinstance(mentions,list) or len(mentions)>50:raise ValueError('@ 成员数量无效，最多 50 人')
+    if not mentions:return {}
+    if not target.get('isGroup') or not target.get('groupId'):raise ValueError('只能在群聊中 @ 成员')
+    import chat
+    profile(s)
+    known={str(x['id']):x['name'].strip() for x in chat.members(s,target,remote,avatars=False)['items'] if x.get('id')}
+    encoded=content.encode('utf-16-le');ids=[];ranges=[]
+    for item in mentions:
+        if not isinstance(item,dict) or str(item.get('id','')) not in known:raise ValueError('@ 的成员已不在当前群聊，请重新选择')
+        start,end=item.get('start'),item.get('end')
+        if type(start)!=int or type(end)!=int or not 0<=start<end<=len(encoded)//2:raise ValueError('@ 成员位置无效')
+        try:label=encoded[start*2:end*2].decode('utf-16-le')
+        except UnicodeError:raise ValueError('@ 成员位置无效')
+        if label!='@'+known[str(item['id'])]:raise ValueError('@ 成员文字已变化，请重新选择')
+        if any(start<b and end>a for a,b in ranges):raise ValueError('@ 成员位置重叠')
+        ranges.append((start,end))
+        uid=str(item['id'])
+        if uid not in ids:ids.append(uid)
+    # Observed official web text sender contract; all-member alerts are excluded.
+    return {'notifyTo':ids,'notifyType':1,'notifyToAll':False}
+
+def deliver(h,s,image,file=False):
+    attachment=image or file
     if not s.authenticated:
         h.respond({'error':'请先扫码登录'},401);return
-    if image:
+    if attachment:
         mime=h.headers.get('Content-Type','')
         if not mime.startswith('multipart/form-data;'):
-            raise ValueError('图片请求格式无效')
+            raise ValueError('附件请求格式无效')
         msg=BytesParser(policy=default).parsebytes(b'Content-Type: '+mime.encode()+b'\r\nMIME-Version: 1.0\r\n\r\n'+read_body(h,MAX_IMAGE+65536))
         fields={}
         for part in msg.iter_parts():
@@ -291,21 +314,26 @@ def deliver(h,s,image):
             if key in fields:raise ValueError('重复的上传字段')
             fields[key]=part
         part=fields.get('file')
-        if part is None:raise ValueError('缺少图片')
+        if part is None:raise ValueError('缺少附件')
         data=part.get_payload(decode=True)
-        if not data or len(data)>MAX_IMAGE:raise ValueError('单张图片暂限 32 MiB，不能发送空文件')
+        if not data or len(data)>MAX_IMAGE:raise ValueError('单个附件暂限 32 MiB，不能发送空文件')
         supplied=json.loads(fields['recipient'].get_content())
         cid=fields['clientMsgId'].get_content().strip()
-        w,height,ext,file_mime=image_info(data)
+        if image:w,height,ext,file_mime=image_info(data)
+        else:w,height,ext,file_mime=0,0,'','application/octet-stream'
         name=(part.get_filename() or 'image').replace('\\','/').split('/')[-1]
         name=re.sub(r'[\x00-\x1f"<>]','_',name)[:180]
-        name=(name.rsplit('.',1)[0] if '.' in name else name)+'.'+ext
-        digest=hashlib.sha256(json.dumps(supplied,sort_keys=True).encode()+name.encode()+data).hexdigest()
+        if image:name=(name.rsplit('.',1)[0] if '.' in name else name)+'.'+ext
+        else:
+            name=name.strip().strip('.') or 'attachment'
+            ext=re.sub(r'[^a-z0-9]','',name.rsplit('.',1)[-1].lower())[:20] if '.' in name else ''
+        digest=hashlib.sha256(('image' if image else 'file').encode()+json.dumps(supplied,sort_keys=True).encode()+name.encode()+data).hexdigest()
     else:
         fields=json.loads(read_body(h,65536))
         supplied=fields['recipient'];cid=fields['clientMsgId'];content=fields['text'].strip()
         if not content or len(content)>10000:raise ValueError('文字需为 1 至 10000 个字符')
-        digest=hashlib.sha256(json.dumps({'recipient':supplied,'text':content},sort_keys=True).encode()).hexdigest()
+        mentions=fields.get('mentions',[])
+        digest=hashlib.sha256(json.dumps({'recipient':supplied,'text':content,'mentions':mentions},sort_keys=True).encode()).hexdigest()
     with s.lock:
         target=recipient(s,supplied)
         op=operation(s,cid,digest,target)
@@ -314,7 +342,7 @@ def deliver(h,s,image):
             receipt=reconcile(s,cid,op)
             h.respond(receipt or {'error':'该消息的回执尚未确认，已阻止重复发送；请到云之家核对或稍后检查回执','uncertain':True},200 if receipt else 409)
             return
-        if image:
+        if attachment:
             if not op.get('fileId'):
                 auth=next((c.value for c in s.jar if c.name=='at'),'')
                 if not auth:raise ValueError('网页登录已过期，请重新扫码')
@@ -322,15 +350,15 @@ def deliver(h,s,image):
                 result=remote(s,upload_url(s)+'?t='+str(int(time.time()*1000)),body=upload_body,content_type=upload_mime)
                 rows=result.get('data',[])
                 if not result.get('success') or not isinstance(rows,list) or not rows or not rows[0].get('fileId'):
-                    raise ValueError(result.get('error','图片上传失败，未发送消息'))
+                    raise ValueError(result.get('error','附件上传失败，未发送消息'))
                 op['fileId']=rows[0]['fileId']
             # Desktop-derived conservative fallback, explicitly reported to UI.
-            ftype=2 if ext=='gif' else (0 if len(data)>=8388608 or w>=5000 or height>=5000 else 1)
+            ftype=0 if file else (2 if ext=='gif' else (0 if len(data)>=8388608 or w>=5000 or height>=5000 else 1))
             param={'file_id':op['fileId'],'name':name,'size':len(data),'ext':ext,'ftype':ftype,'unreadMonitor':int(ftype==0),'picWidth':w,'picHeight':height}
             content='[文件]:'+name if ftype==0 else '[图片]'
             msg_type=8
         else:
-            param={};msg_type=2
+            param=mention_param(s,target,content,mentions);msg_type=2
         op['state']='sending'
         try:
             receipt=send(s,target,cid,content,msg_type,param)
@@ -342,7 +370,7 @@ def deliver(h,s,image):
             h.respond({'error':'消息请求已提交，但回执未确认。请检查回执，避免重复发送。','uncertain':True},504)
             return
         op['state']='sent';op['receipt']=receipt
-        if image:
+        if attachment:
             receipt.update({'fileId':op['fileId'],'ftype':ftype,'width':w,'height':height})
             # Official UI registers the uploaded file with the conversation after sending.
             try:
@@ -391,9 +419,9 @@ def _handle(h,s,path):
                 if hasattr(s,name):delattr(s,name)
         h.respond({'success':True})
         return True
-    if path in {'/api/messages/image','/api/messages/text'} and h.command=='POST':
+    if path in {'/api/messages/image','/api/messages/file','/api/messages/text'} and h.command=='POST':
         try:
-            deliver(h,s,path.endswith('/image'))
+            deliver(h,s,path.endswith('/image'),file=path.endswith('/file'))
         except AuthenticationError:
             raise
         except (ValueError,KeyError,TypeError) as exc:

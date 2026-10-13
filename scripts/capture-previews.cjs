@@ -23,8 +23,8 @@ const messages = [
  {id:'demo-4',type:2,own:true,time:'2026-10-13 10:26:00',content:'图片收到，可以查看原图。',unreadCount:0},
  {id:'demo-5',type:2,sender:'演示联系人',time,content:'支持拖拽、粘贴和多图发送，也可以逐页读取历史消息。'}
 ];
-const staticFiles={'/':'web/index.html','/app.js':'web/app.js','/style.css':'web/style.css','/api/ui/chat-utils':'web/chat-utils.mjs'};
-async function setup(page) {
+const staticFiles={'/':'web/index.html','/app.js':'web/app.js','/style.css':'web/style.css','/api/ui/chat-utils':'web/chat-utils.mjs','/api/ui/markdown':'web/markdown.mjs','/api/ui/composer-utils':'web/composer-utils.mjs'};
+async function setup(page, options={}) {
  await page.addInitScript(() => {
   // Replace the realtime transport, so screenshots never contact upstream services.
   window.EventSource = class {
@@ -37,12 +37,14 @@ async function setup(page) {
   if(url.origin!==origin)return route.abort();
   const file=staticFiles[url.pathname];
   if(file)return route.fulfill({body:fs.readFileSync(path.join(root,file)),contentType:file.endsWith('.html')?'text/html; charset=utf-8':file.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8'});
+  if(options.handle&&await options.handle(route,url))return;
   let data;
   switch(url.pathname){
    case '/api/status':data={authenticated:true};break;
    case '/api/me':data={name:'演示用户',avatar:''};break;
    case '/api/sync':data={items:chats,unread:5,syncedAt:'2026-10-13T10:30:00+08:00'};break;
    case '/api/history':data={items:url.searchParams.has('after')?[]:messages,more:false,oldest:'demo-1',newest:'demo-5'};break;
+   case '/api/members':data={items:[{id:'demo-member',name:'演示成员',avatar:''},{id:'other',name:'其他成员',avatar:''}]};break;
    case '/api/read-state':data={counts:{'demo-2':0,'demo-4':0}};break;
    case '/api/ui/emojis':data={};break;
    default:return route.fulfill({status:404,body:'{"error":"Preview request blocked"}',contentType:'application/json'});
@@ -63,7 +65,7 @@ async function setup(page) {
  await page.evaluate(()=>{const label=document.createElement('div');label.className='demo-watermark';label.textContent='脱敏演示 · 虚构数据';document.body.append(label);});
  await page.evaluate(async()=>{await document.fonts.ready;await Promise.all([...document.images].map(img=>img.decode().catch(()=>{})));});
 }
-(async()=>{
+async function capturePreviews(){
  fs.mkdirSync(out,{recursive:true});
  const browser=await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_CHANNEL||undefined});
  try{
@@ -83,4 +85,6 @@ async function setup(page) {
   await mobile.screenshot({path:path.join(out,'chat-mobile.png')});
   console.log('Created 3 redacted screenshots using synthetic data. No account or network service used.');
  }finally{await browser.close();}
-})().catch(error=>{console.error(error);process.exitCode=1;});
+}
+module.exports={setup,origin,chats,messages};
+if(require.main===module)capturePreviews().catch(error=>{console.error(error);process.exitCode=1;});

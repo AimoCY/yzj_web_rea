@@ -122,7 +122,7 @@ def normalize_message(s,row,info):
     ext=str(p.get('ext') or '').lower();name=str(p.get('name') or p.get('fileName') or '附件')
     if fid and kind in (3,8,15,17):
         ftype=number(p.get('ftype'),-1)
-        image=kind==8 and (ftype in (1,2) or p.get('emojiType') or ext in ('jpg','jpeg','png','gif','bmp','webp'))
+        image=kind==8 and (ftype in (1,2) or p.get('emojiType') or (ftype<0 and ext in ('jpg','jpeg','png','gif','bmp','webp')))
         mode='image' if image else 'video' if ftype==3 or ext in ('mp4','webm','mov') else 'audio' if kind==3 or ftype==4 or ext in ('mp3','wav','m4a','ogg') else 'file'
         result['attachments'].append({'kind':mode,'name':name,'size':number(p.get('size')),'width':number(p.get('picWidth')),'height':number(p.get('picHeight')),
             'url':file_url(s,fid),'original':file_url(s,fid,True),'download':file_url(s,fid,True,True,name)})
@@ -178,6 +178,23 @@ def history(s,target,remote,info,after='',before='',count=50):
     return {'items':messages,'more':bool(data.get('more')),'groupId':group or target.get('groupId',''),
             'oldest':messages[0]['id'] if messages else before,'newest':messages[-1]['id'] if messages else after}
 
+def serve_document(h,s,key):
+    entry=state(s)['media'].get(key)
+    if not entry or not entry[1].lower().endswith(('.md','.markdown')):
+        h.respond({'error':'无效的 Markdown 文件引用'},404);return
+    url,name,_=entry
+    req=urllib.request.Request(url,headers={'Referer':'https://www.yunzhijia.com/im/xiaoxi/'})
+    with s.lock:s.jar.add_cookie_header(req)
+    from api import SafeRedirect
+    proxy=__import__('os').environ.get('YZJ_PROXY','')
+    opener=urllib.request.build_opener(urllib.request.ProxyHandler({'https':proxy} if proxy else {}),SafeRedirect())
+    with opener.open(req,timeout=30) as res:
+        data=res.read(1024*1024+1)
+    if len(data)>1024*1024:raise ValueError('Markdown 预览暂限 1 MiB，请下载查看')
+    try:text=data.decode('utf-8-sig')
+    except UnicodeError:raise ValueError('Markdown 文件需使用 UTF-8 编码，请下载查看')
+    h.respond({'name':name,'text':text})
+
 def serve_media(h,s,key):
     entry=state(s)['media'].get(key)
     if not entry:h.respond({'error':'无效或过期的媒体引用'},404);return
@@ -228,9 +245,9 @@ def read_state(s,target,remote):
                 st['lastReadFetch'][channel]=time.monotonic()
         return {'counts':st['reads'].get(target.get('groupId'),{})}
 
-def members(s,target,remote):
+def members(s,target,remote,avatars=True):
     info=getattr(s,'profile',{})
-    own={'id':info.get('id'),'name':info.get('name') or '我','avatar':media(s,info.get('photoUrl'))}
+    own={'id':info.get('id'),'name':info.get('name') or '我','avatar':media(s,info.get('photoUrl')) if avatars else ''}
     if target.get('id')==TRANSFER:return {'items':[own]}
     if not target.get('groupId'):return {'items':[]}
     offset=0;items=[]
@@ -238,7 +255,7 @@ def members(s,target,remote):
         result=remote(s,'/im/rest/group/groupUser',fields={'groupId':target['groupId'],'offset':offset,'count':200})
         if not result.get('success'):raise ValueError(result.get('error','读取会话成员失败'))
         data=result.get('data') or {};rows=data.get('users',[])
-        items.extend({'id':x.get('id'),'name':x.get('name') or x.get('nickName') or '成员','avatar':media(s,x.get('photoUrl'))} for x in rows)
+        items.extend({'id':x.get('id'),'name':x.get('name') or x.get('nickName') or '成员','avatar':media(s,x.get('photoUrl')) if avatars else ''} for x in rows)
         if not data.get('hasMore') or not rows:break
         offset+=len(rows)
         if offset>100000:raise ValueError('成员分页超过服务保护上限')
@@ -246,12 +263,14 @@ def members(s,target,remote):
     return {'items':items}
 
 def handle(h,s,path,remote,profile):
-    if path in {'/api/ui/chat-utils','/api/ui/emojis'}:
+    if path in {'/api/ui/chat-utils','/api/ui/emojis','/api/ui/markdown','/api/ui/composer-utils'}:
         from pathlib import Path
-        h.respond((Path(__file__).parent/'web'/('chat-utils.mjs' if path.endswith('chat-utils') else 'emojis.json')).read_bytes(),mime='text/javascript; charset=utf-8' if path.endswith('chat-utils') else 'application/json; charset=utf-8');return True
-    if path not in {'/api/sync','/api/history','/api/media','/api/events','/api/me','/api/read-state','/api/members','/api/card'}:return False
+        name={'chat-utils':'chat-utils.mjs','emojis':'emojis.json','markdown':'markdown.mjs','composer-utils':'composer-utils.mjs'}[path.rsplit('/',1)[-1]]
+        h.respond((Path(__file__).parent/'web'/name).read_bytes(),mime='application/json; charset=utf-8' if name.endswith('.json') else 'text/javascript; charset=utf-8');return True
+    if path not in {'/api/sync','/api/history','/api/media','/api/events','/api/me','/api/read-state','/api/members','/api/card','/api/document'}:return False
     if not s.authenticated:h.respond({'error':'请先扫码登录','requiresLogin':True},401);return True
     q=urllib.parse.parse_qs(urllib.parse.urlparse(h.path).query)
+    if path=='/api/document':serve_document(h,s,q.get('key',[''])[0]);return True
     if path=='/api/media':serve_media(h,s,q.get('key',[''])[0]);return True
     if path=='/api/card':
         cid=state(s).get('cards',{}).get(q.get('messageId',[''])[0])
