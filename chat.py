@@ -115,7 +115,7 @@ def normalize_message(s,row,info):
     own=number(row.get('direction'))==1 or bool(sender and sender in (info.get('id'),info.get('wbUserId')))
     result={'id':mid,'clientMsgId':row.get('clientMsgId') or '', 'type':kind,
             'content':str(row.get('content') or ''),'time':row.get('sendTime') or '',
-            'senderId':sender,'sender':row.get('userName') or row.get('fromUserName') or row.get('fromPersonName') or (info.get('name') if own else '') or '未知发送者',
+            'senderId':sender,'sender':row.get('senderName') or row.get('userName') or row.get('fromUserName') or row.get('fromPersonName') or (info.get('name') if own else '') or '未知发送者',
             'own':own,'avatar':media(s,row.get('photoUrl') or row.get('headerUrl') or ('/space/c/photo/load?'+urllib.parse.urlencode({'id':sender,'spec':50}) if sender else '')),
             'param':p,'unreadCount':row.get('unreadUserCount'),'attachments':[]}
     fid=p.get('file_id') or p.get('fileId')
@@ -263,9 +263,9 @@ def members(s,target,remote,avatars=True):
     return {'items':items}
 
 def handle(h,s,path,remote,profile):
-    if path in {'/api/ui/chat-utils','/api/ui/emojis','/api/ui/markdown','/api/ui/composer-utils'}:
+    if path in {'/api/ui/chat-utils','/api/ui/emojis','/api/ui/markdown','/api/ui/composer-utils','/api/ui/media-cache'}:
         from pathlib import Path
-        name={'chat-utils':'chat-utils.mjs','emojis':'emojis.json','markdown':'markdown.mjs','composer-utils':'composer-utils.mjs'}[path.rsplit('/',1)[-1]]
+        name={'chat-utils':'chat-utils.mjs','emojis':'emojis.json','markdown':'markdown.mjs','composer-utils':'composer-utils.mjs','media-cache':'media-cache.mjs'}[path.rsplit('/',1)[-1]]
         h.respond((Path(__file__).parent/'web'/name).read_bytes(),mime='application/json; charset=utf-8' if name.endswith('.json') else 'text/javascript; charset=utf-8');return True
     if path not in {'/api/sync','/api/history','/api/media','/api/events','/api/me','/api/read-state','/api/members','/api/card','/api/document'}:return False
     if not s.authenticated:h.respond({'error':'请先扫码登录','requiresLogin':True},401);return True
