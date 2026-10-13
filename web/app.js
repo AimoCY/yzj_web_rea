@@ -7,7 +7,6 @@ const API_BASE=new URL('./api/',import.meta.url).pathname;
 const $=id=>document.getElementById(id);
 const el=(tag,cls,text)=>{const node=document.createElement(tag);if(cls)node.className=cls;if(text!==undefined)node.textContent=text;return node;};
 const shell=document.querySelector('.shell');
-initAutoReplySettings({api,API_BASE});
 let authenticated=false,me={},conversations=[],searchResults=[],recipient=null,images=[],busy=false;
 let loginTimer,syncTimer,searchTimer,eventSource,syncBusy=false,syncQueued=false,searchSeq=0;
 let emojis={},panelVisible=true;
@@ -15,6 +14,11 @@ let liveStatus='fallback',unreadOnly=false,listSignature='',chatGeneration=0,tex
 let drafts={},restoredId='',restoredText='',matches=[],matchIndex=0;
 let selectedMentions=[],previousText='',mentionOptions=[],mentionIndex=0,mentionRange=null,mentionSeq=0,markdownPreview=false;
 const histories=new Map(),cardCache=new Map(),memberCache=new Map();
+let autoReplyRecipients=new Set();
+const autoReplySettings=initAutoReplySettings({api,API_BASE,onConfig(data){
+  autoReplyRecipients=new Set(data?.config?.enabled?data.config.recipients:[]);
+  if(authenticated)renderConversations();
+}});
 try{const stored=JSON.parse(sessionStorage.getItem('yzj-chat-drafts')||'{}');drafts=stored.drafts||{};restoredId=stored.selected||'';const old=JSON.parse(sessionStorage.getItem('yzj-draft')||'null');if(!restoredId&&old){restoredId=old.recipientId||'';restoredText=old.text||'';}}catch{}
 
 const imageCache=new ImageCache(),imageLoads=new Map(),imageVersions=new WeakMap();
@@ -41,7 +45,7 @@ function connection(text,status='fallback'){
   $('light').style.background=status==='connected'?'#47b995':authenticated?'#e2b35d':'#bac5d5';
 }
 function expire(message){
-  imageCache.clear();
+  autoReplySettings.reset();imageCache.clear();
   authenticated=false;eventSource?.close();clearTimeout(syncTimer);clearTimeout(loginTimer);
   $('login').hidden=false;$('conversation-view').hidden=true;shell.classList.remove('logged-in');
   $('login-status').textContent=message||'登录已过期，请重新扫码';connection('请重新登录');updateSend();
@@ -68,6 +72,7 @@ window.addEventListener('beforeunload',()=>{saveDraft();eventSource?.close();});
 async function connected(){
   authenticated=true;shell.classList.add('logged-in');$('login').hidden=true;$('conversation-view').hidden=false;$('logout').hidden=false;clearTimeout(loginTimer);connection('正在同步会话');updateSend();
   try{me=await api('me');avatar($('me-avatar'),me.avatar,me.name);}catch(e){if(!authenticated)return;}
+  autoReplySettings.refresh(true);
   await syncConversations(true);
   if(!recipient&&restoredId){const selected=conversations.find(x=>x.id===restoredId);if(selected){await selectConversation(selected);if(restoredText&&!$('text').value){$('text').value=restoredText;restoredText='';updateSend();}}}
   startEvents();scheduleSync();
@@ -97,7 +102,7 @@ async function syncConversations(full=false){
     $('unread-chats').textContent=conversations.filter(x=>x.unread>0).length||'';
     $('sync-time').textContent=new Date(result.syncedAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false});
     if(liveStatus!=='connected')connection('自动同步中',liveStatus);
-    renderConversations();updateSend();
+    autoReplySettings.refresh();renderConversations();updateSend();
   }catch(e){if(authenticated)connection('同步重试中');}
   finally{syncBusy=false;if(syncQueued){syncQueued=false;setTimeout(()=>syncConversations(),200);}}
 }
@@ -123,7 +128,7 @@ function renderConversations(){
   const query=$('search').value.trim().toLocaleLowerCase();
   let items=query?[...conversations.filter(x=>x.name.toLocaleLowerCase().includes(query)),...searchResults]:conversations;
   items=[...new Map(items.map(x=>[x.id,x])).values()];if(unreadOnly)items=items.filter(x=>x.unread>0);
-  const signature=JSON.stringify([recipient?.id,query,unreadOnly,items]);if(signature===listSignature)return;listSignature=signature;
+  const signature=JSON.stringify([recipient?.id,query,unreadOnly,items,[...autoReplyRecipients]]);if(signature===listSignature)return;listSignature=signature;
   const container=$('conversations'),scroll=container.scrollTop;container.replaceChildren();pruneImageLoads();
   for(const item of items){
     const button=el('button','conversation'+(recipient?.id===item.id?' chosen':'')+(item.pinned?' pinned':'')+(item.muted?' muted':''));button.dataset.id=item.id;button.setAttribute('aria-pressed',String(recipient?.id===item.id));button.ariaLabel=item.name;button.title=item.name+'\n'+preview(item);button.disabled=busy;
@@ -133,7 +138,11 @@ function renderConversations(){
     if(item.mention)bottom.append(el('span','mention','[有人@我]'));
     bottom.append(el('span','conversation-preview',preview(item)));
     if(item.unread>0)bottom.append(el('span','unread-badge',item.unread>99?'99+':item.unread));
-    body.append(top,bottom);button.append(photo,body);button.onclick=()=>selectConversation(item);const wrapper=el('div');wrapper.role='listitem';wrapper.append(button);container.append(wrapper);
+    body.append(top,bottom);
+    if(autoReplyRecipients.has(item.id)||autoReplyRecipients.has(item.groupId)){
+      const badge=el('span','conversation-auto-reply','已开启自动回复');badge.title=item.isGroup?'群消息明确 @ 本人时自动回复':'收到对方新消息时自动回复';body.append(badge);
+    }
+    button.append(photo,body);button.onclick=()=>selectConversation(item);const wrapper=el('div');wrapper.role='listitem';wrapper.append(button);container.append(wrapper);
   }
   if(!items.length)container.append(el('p','empty',query?'没有找到匹配的联系人或群聊':unreadOnly?'没有未读会话':'暂无会话'));
   container.scrollTop=scroll;

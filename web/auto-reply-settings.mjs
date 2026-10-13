@@ -1,4 +1,4 @@
-export function initAutoReplySettings({api,API_BASE}){
+export function initAutoReplySettings({api,API_BASE,onConfig=()=>{}}){
  const $=id=>document.getElementById(id),shell=document.querySelector('.shell');let config,accountId='',targets=new Map(),selected=new Set(),prompts={},loading=false,queryVersion=0,remoteMatches=new Set(),searchTimer;
  const status=(text,error=false)=>{$('auto-status').textContent=text;$('auto-status').className=error?'error':'';};
  const show=open=>{$('auto-reply-settings').hidden=!open;$('chat-main').hidden=open;shell.classList.toggle('auto-settings-open',open);$('auto-reply-nav').classList.toggle('rail-active',open);$('chat-nav').classList.toggle('rail-active',!open);};
@@ -6,8 +6,9 @@ export function initAutoReplySettings({api,API_BASE}){
  const element=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;};
  const changed=()=>{if(config)status('有未保存的修改，请点击保存并应用');};
  const updateRuntime=()=>{
-  $('auto-runtime-summary').textContent=!runtime.connected?'云之家尚未连接，登录后开始监控':!runtime.enabled?'自动回复已暂停':`运行中 · 正在处理 ${runtime.processing||0} 个会话 · 累计失败 ${runtime.errors||0} 次`;
-  for(const [id,node] of runtimeNodes){const state=runtime.conversations?.[id];node.textContent=state?.detail||(config?.enabled?'等待建立监控基线':'全局开关已关闭');node.classList.toggle('error',state?.result==='error');}
+  const failed=Object.values(runtime.conversations||{}).filter(s=>s.result==='error').length;
+  $('auto-runtime-summary').textContent=runtime.lastError||(!runtime.connected?'云之家尚未连接，登录后开始监控':!runtime.enabled?'自动回复已暂停':`${failed?'存在异常 · '+failed+' 个会话失败':'运行中'} · 正在处理 ${runtime.processing||0} 个会话 · 累计失败 ${runtime.errors||0} 次`);
+  for(const [id,node] of runtimeNodes){const state=runtime.conversations?.[id];node.textContent=state?.detail||(config?.enabled?'等待建立监控基线':'全局开关已关闭');if(state?.lastReplyAt)node.textContent+=' · 最近成功回复 '+new Date(state.lastReplyAt).toLocaleTimeString('zh-CN',{hour12:false});node.classList.toggle('error',state?.result==='error');}
  };
  const runtimePath=API_BASE.replace(/api\/$/,'')+'plugin-status';
  async function pollRuntime(){clearTimeout(runtimeTimer);if(!opened)return;try{const response=await fetch(runtimePath);if(response.ok){runtime=await response.json();updateRuntime();}}catch{}if(opened)runtimeTimer=setTimeout(pollRuntime,4000);}
@@ -35,7 +36,7 @@ export function initAutoReplySettings({api,API_BASE}){
  async function load(){
   if(loading)return;loading=true;$('auto-save').disabled=true;status('正在加载配置…');
   try{
-   const data=await api('auto-reply');config=data.config;accountId=data.accountId;selected=new Set(config.recipients);prompts={...config.recipientPrompts};targets.clear();for(const t of data.targets||[])targets.set(t.id,t);
+   const data=await api('auto-reply');config=data.config;onConfig(data);accountId=data.accountId;selected=new Set(config.recipients);prompts={...config.recipientPrompts};targets.clear();for(const t of data.targets||[])targets.set(t.id,t);
    let listError='';try{const chats=await api('sync');for(const t of chats.items||[])if(t.canSend!==false)targets.set(t.id,t);}catch(e){listError=e.message;}
    for(const id of selected)if(!targets.has(id))targets.set(id,{id,name:id,isGroup:false});
    $('auto-enabled').checked=config.enabled;$('auto-prompt').value=config.prompt||'';$('auto-interval').value=config.pollIntervalMs;$('auto-timeout').value=config.replyTimeoutMs;$('auto-concurrency').value=config.maxConcurrent;$('auto-tools').value=config.allowedTools.join(', ');render();status(listError?'配置已加载，会话列表暂不可用：'+listError:config.enabled?'自动回复已开启':'自动回复已关闭',!!listError);
@@ -51,7 +52,10 @@ export function initAutoReplySettings({api,API_BASE}){
   event.preventDefault();if(loading||!config)return;loading=true;$('auto-save').disabled=true;status('正在保存并应用…');
   const recipients=[...selected],recipientPrompts=Object.fromEntries(recipients.map(id=>[id,prompts[id]||'']));
   const next={enabled:$('auto-enabled').checked,recipients,mentionOnly:true,prompt:$('auto-prompt').value,recipientPrompts,pollIntervalMs:Number($('auto-interval').value),replyTimeoutMs:Number($('auto-timeout').value),maxConcurrent:Number($('auto-concurrency').value),allowedTools:$('auto-tools').value.split(',').map(x=>x.trim()).filter(Boolean)};
-  try{const result=await api('auto-reply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accountId,config:next})});config=result.config;selected=new Set(config.recipients);prompts={...config.recipientPrompts};for(const t of result.targets||[])targets.set(t.id,t);render();status(config.enabled?'已保存并开启自动回复':'已保存，自动回复已关闭');pollRuntime();}catch(e){status(e.message,true);}finally{loading=false;$('auto-save').disabled=false;}
+  try{const result=await api('auto-reply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accountId,config:next})});config=result.config;onConfig(result);selected=new Set(config.recipients);prompts={...config.recipientPrompts};for(const t of result.targets||[])targets.set(t.id,t);render();status(config.enabled?'已保存并开启自动回复':'已保存，自动回复已关闭');pollRuntime();}catch(e){status(e.message,true);}finally{loading=false;$('auto-save').disabled=false;}
  };
- fetch(API_BASE.replace(/api\/$/,'')+'plugin-status').then(response=>{if(response.ok){$('auto-reply-nav').hidden=false;shell.classList.add('plugin-settings-available');}}).catch(()=>{});
+ let supported=false,refreshing=false,lastRefresh=0,epoch=0;
+ async function refresh(force=false){if(!supported||refreshing||(!force&&Date.now()-lastRefresh<30000))return;refreshing=true;const current=epoch;try{const data=await api('auto-reply');if(current===epoch){lastRefresh=Date.now();onConfig(data);}}catch{if(current===epoch)onConfig(null);}finally{refreshing=false;}}
+ fetch(API_BASE.replace(/api\/$/,'')+'plugin-status').then(response=>{if(response.ok){supported=true;refresh(true);$('auto-reply-nav').hidden=false;shell.classList.add('plugin-settings-available');}}).catch(()=>{});
+ return {refresh,reset(){epoch++;lastRefresh=0;onConfig(null);}};
 }
