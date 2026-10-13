@@ -13,7 +13,18 @@ export async function serveMounted(bridge,prefix,req,res){
  if(req.method!=='GET'&&req.method!=='POST'){res.writeHead(405).end();return;}
  const options={method:req.method,headers:{}};
  for(const name of ['content-type','range'])if(req.headers[name])options.headers[name]=req.headers[name];
- if(req.method==='POST'){options.body=req;options.duplex='half';}
+ if(req.method==='POST'){
+  // The Python HTTP server requires Content-Length and does not decode chunked bodies.
+  const limit=['/api/messages/image','/api/messages/file'].includes(path.split('?')[0])?32*1024*1024+65536:65536;
+  const chunks=[];let length=0;
+  for await(const chunk of req){
+   length+=chunk.length;
+   if(length>limit){res.writeHead(413,{'Content-Type':'application/json','Cache-Control':'no-store'}).end(JSON.stringify({error:'请求大小超出限制'}));return;}
+   chunks.push(chunk);
+  }
+  options.body=Buffer.concat(chunks,length);
+  options.headers['content-length']=String(length);
+ }
  const upstream=await bridge.fetch(path,options,controller.signal,!path.startsWith('/api/events'));
  const mime=upstream.headers.get('content-type')||'application/octet-stream';
  const headers={'Content-Type':mime,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'};
