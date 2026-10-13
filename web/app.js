@@ -7,7 +7,7 @@ const el=(tag,cls,text)=>{const node=document.createElement(tag);if(cls)node.cla
 const shell=document.querySelector('.shell');
 let authenticated=false,me={},conversations=[],searchResults=[],recipient=null,images=[],busy=false;
 let loginTimer,syncTimer,searchTimer,eventSource,syncBusy=false,syncQueued=false,searchSeq=0;
-let emojis={};
+let emojis={},panelVisible=true;
 let liveStatus='fallback',unreadOnly=false,listSignature='',chatGeneration=0,textRequest=null;
 let drafts={},restoredId='',restoredText='',matches=[],matchIndex=0;
 let selectedMentions=[],previousText='',mentionOptions=[],mentionIndex=0,mentionRange=null,mentionSeq=0,markdownPreview=false;
@@ -86,7 +86,7 @@ async function syncConversations(full=false){
 }
 function scheduleSync(){
   clearTimeout(syncTimer);if(!authenticated)return;
-  syncTimer=setTimeout(async()=>{await syncConversations();await refreshCurrent();await refreshReadState();scheduleSync();},document.hidden?15000:liveStatus==='connected'?10000:2500);
+  syncTimer=setTimeout(async()=>{await syncConversations();await refreshCurrent();await refreshReadState();scheduleSync();},(document.hidden||!panelVisible)?15000:liveStatus==='connected'?10000:2500);
 }
 function startEvents(){
   eventSource?.close();eventSource=new EventSource(API_BASE+'events');
@@ -95,6 +95,11 @@ function startEvents(){
 }
 window.addEventListener('online',()=>{if(authenticated){startEvents();syncConversations();refreshCurrent();}});
 window.addEventListener('offline',()=>connection('网络已断开','offline'));
+window.addEventListener('message',event=>{
+  if(window.parent===window||event.source!==window.parent||event.origin!==location.origin||event.data?.type!=='yzj-panel-visibility'||typeof event.data.visible!=='boolean')return;
+  panelVisible=event.data.visible;
+  if(authenticated){if(panelVisible){syncConversations();refreshCurrent();refreshReadState();}scheduleSync();}
+});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&authenticated){syncConversations();refreshCurrent();scheduleSync();}});
 $('refresh-list').onclick=()=>syncConversations(true);
 function renderConversations(){
