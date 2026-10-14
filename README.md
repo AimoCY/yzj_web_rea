@@ -38,7 +38,7 @@
 
 ## Harness 插件安装
 
-已按官方 **0.2.1-alpha.2** 规范接入并验证；Harness 仍在预览期，其他版本需重新确认兼容性。Node.js 要求 `^22.19.0 || >=24.0.0`，另需 Python 3.9+。
+已按官方 **0.2.1-alpha.2** 规范接入并验证；Harness 仍在预览期，其他版本需重新确认兼容性。Node.js 要求 `^22.19.0 || >=24.0.0`，另需 Python 3.9+。插件默认自动检测可用命令：Windows 优先 `python`、`py -3`，其他系统优先 `python3`；可通过 `python` 配置指定可执行文件。
 
 在本项目目录中：
 
@@ -52,7 +52,7 @@ npm pack
 
 ```sh
 dsh --profile yzj --from-default-profile web --dump-config
-dsh plugin --profile yzj add /absolute/path/dsh-plugin-yunzhijia-0.2.4.tgz
+dsh plugin --profile yzj add /absolute/path/dsh-plugin-yunzhijia-0.2.5.tgz
 dsh --profile yzj --no-open
 ```
 

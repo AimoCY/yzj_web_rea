@@ -51,7 +51,7 @@ Host 通过 `apply`、`inject`、Schemastery `Config`、`ctx.effect`、`ctx.tool
 ```yaml
 - id: yunzhijia
   config:
-    python: python3
+    python: '' # 自动检测；也可填写可执行文件绝对路径
     proxy: ''
     mountPath: /plugins/yzj
     autoReply:
@@ -69,7 +69,7 @@ Host 通过 `apply`、`inject`、Schemastery `Config`、`ctx.effect`、`ctx.tool
 
 | 配置 | 默认值 | 说明 |
 | --- | --- | --- |
-| `python` | `python3` | Python 可执行文件；Windows 可改为 `python` |
+| `python` | 空（自动检测） | Windows 尝试 `python`、`py -3`、`python3`，其他系统尝试 `python3`、`python`、`py -3`；可指定可执行文件绝对路径，支持空格。使用启动器时填写 `py`，不要填写 `py -3` |
 | `proxy` | 空 | 直连；需要代理时填 `http://127.0.0.1:端口` |
 | `mountPath` | `/plugins/yzj` | Harness 内的页面与接口挂载路径 |
 | `startupTimeoutMs` | 15000 | 连接服务启动等待 |
@@ -168,3 +168,13 @@ npm pack --dry-run
 自动回复配置区区分读取连接失败、登录过期、超时和生成失败。已登录仅表示本地存在登录会话，不代表上游消息接口连通；网络失败不会进入 @ 判断。网络恢复后继续从原游标检查消息。过滤原因区分本人发送、撤回、系统消息和没有明确 @；保留最近成功回复时间，自己的回复回声不会覆盖成功状态。
 
 需要代理的环境应在本机 web profile 的 `cordis.patch.yml` 中持久配置 `yunzhijia` 的 `proxy`（示例见上方安装配置），不能仅依赖某次启动的 `--patch` 参数。代理地址按本机实际端口填写；不要提交本机配置到公开仓库。
+
+## 0.2.5：Python 启动兼容性
+
+默认自动检测 Python 3.9+，通过执行版本检测代码跳过 Windows 应用执行别名和返回空输出的命令。`python` 为空或 `auto` 时自动检测；显式指定命令/路径时仅验证并使用该项，失败时提示修正配置，不会静默切换其他解释器。旧配置若写死 `python3`，在 Windows 上请删除该字段或改为空。
+
+Windows Python 启动器支持填写 `py` 或 `py.exe` 的绝对路径，插件自动附加 `-3`；所有命令通过参数数组执行，不经过 shell。后台使用 UTF-8 编码，避免 Windows 中文启动输出编码异常。
+
+启动失败区分安装包缺少 `server.py`、解释器不可用/版本过低、后台退出和启动超时。后台退出时提供 Python 版本、退出码和有限长度的错误摘要，隐藏连接密钥及 URL；登录后的后台错误输出不写入日志。启动健康检查受启动截止时间限制。
+
+回归测试覆盖空输出别名、启动器回退、带空格的显式路径、Python 版本校验、后台退出错误及密钥隐藏。本机使用真实 Python 验证服务启动；Windows 分支通过模拟命令选择验证，仍需在 Windows 实机安装验收。代理默认仍为空（直连）。

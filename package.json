@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-yunzhijia",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Yunzhijia personal-account chat, tools and automatic replies for DeepSeek Harness",
   "type": "module",
   "main": "plugin/index.mjs",

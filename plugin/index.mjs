@@ -13,7 +13,7 @@ import {AutoReplyController} from './auto-reply.mjs';
 export const name='yunzhijia';
 export const inject=['tools','webServer','connection','agents','agentDefaultModel','systemPrompt'];
 export const Config=Schema.object({
- python:Schema.string().default('python3'),proxy:Schema.string().default(''),mountPath:Schema.string().default('/plugins/yzj'),
+ python:Schema.string().default(''),proxy:Schema.string().default(''),mountPath:Schema.string().default('/plugins/yzj'),
  startupTimeoutMs:Schema.natural().min(100).default(15000),requestTimeoutMs:Schema.natural().min(1000).default(60000),
  settingsPath:Schema.string().default(''),workspacePath:Schema.string().default(''),fileRoots:Schema.array(Schema.string()).default([]),
  autoReply:Schema.object({prompt:Schema.string().default(''),recipientPrompts:Schema.dict(Schema.string()).default({}),enabled:Schema.boolean().default(false),recipients:Schema.array(Schema.string()).default([]),mentionOnly:Schema.boolean().default(true),pollIntervalMs:Schema.natural().min(1000).default(4000),replyTimeoutMs:Schema.natural().min(1000).default(180000),maxConcurrent:Schema.natural().min(1).max(10).default(2),allowedTools:Schema.array(Schema.string()).default([])}).default({}),
